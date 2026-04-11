@@ -1,0 +1,48 @@
+#pragma once
+
+#include <vector>
+#include <string.h>
+
+#include "protocol.h"
+#include "Encoder.h"
+
+class Decoder
+{
+private:
+
+public:
+    static bool Decode(std::vector<uint8_t> raw_data, ProtocolHeader& header, std::string& body) {
+        int header_len = sizeof(header);
+
+        // 1. 长度不够
+        if (raw_data.size() < header_len) {
+            return false;
+        }
+
+        // 2. 零拷贝头部解析
+        const ProtocolHeader* headerPtr = reinterpret_cast<const ProtocolHeader*>(raw_data.data());
+
+        // 3. 校验魔数
+        if (headerPtr->magic != MAGIC_NUMBER) {
+            std::cerr << "magic check error" << std::endl;
+            return false;
+        }
+
+        // 4. body 未完全接入
+        if (raw_data.size() < header_len + header.body_len) {
+            return false;
+        }
+
+        // 5. 校验
+        if (Encoder::simple_crc32(raw_data.data() + header_len, headerPtr->body_len) != headerPtr->checksum) {
+            std::cerr << "crc32 check faied" << std::endl;
+            return false;
+        }
+
+        // 拷贝
+        header = *headerPtr;
+        body = std::string(reinterpret_cast<const char*>(raw_data.data() + header_len), header.body_len);
+
+        return true;
+    }
+};
