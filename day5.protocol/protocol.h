@@ -2,6 +2,8 @@
 // 用于定义协议结构体
 #include <iostream>
 
+#include "Serialize.h"
+
 // 1. 定义魔数，用于快速识别协议
 const uint16_t MAGIC_NUMBER = 0x5250; // 0x5250 ('R''P')
 
@@ -10,11 +12,6 @@ enum MessageType : uint8_t {
     MSG_REQUEST = 1,    // 请求
     MSG_RESPONSE = 2,   // 响应
     MSG_HEARTABAT = 3   // 心跳
-};
-
-enum SerializeType : uint8_t {
-    SERIALIZE_JSON = 1,
-    SERIALIZE_PROTOBUF = 2
 };
 
 // 定义协议结构体

@@ -5,6 +5,7 @@
 #include "Decoder.h"
 #include "nlohmann/json.hpp"
 #include "JsonSerialize.h"
+#include "Serialize.h"
 
 using json = nlohmann::json;
 
@@ -15,6 +16,9 @@ struct User
 
     NLOHMANN_DEFINE_TYPE_INTRUSIVE(User, id, name);
 };
+
+#define FIELD_PRINTER(OBJECT, FIELD) \
+    std::cout << #FIELD << " " << OBJECT.FIELD << std::endl;
 
 int main(int argc, char const *argv[])
 {
@@ -45,6 +49,16 @@ int main(int argc, char const *argv[])
     std::cout << u1.id << " " << u1.name << std::endl;
 
     delete serializer;
+
+    std::string u_str1 = Serialize::Serialization(u);
+
+    User u_decode = Serialize::Deserialization<User>(u_str1);
+
+    std::cout << "decode field: " << u_decode.id << std::endl;
+    std::cout << "decode field: " << u_decode.name << std::endl;
+
+    FIELD_PRINTER(u_decode, id);
+
 
     return 0;
 }

@@ -11,6 +11,7 @@ class Decoder
 private:
 
 public:
+    // template<class T>
     static bool Decode(std::vector<uint8_t> raw_data, ProtocolHeader& header, std::string& body) {
         int header_len = sizeof(header);
 

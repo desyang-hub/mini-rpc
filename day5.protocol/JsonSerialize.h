@@ -6,6 +6,8 @@ class JsonSerialize
 {
 
 public:
+    JsonSerialize() = default;
+
     // 序列化接口
     /// @param body: 待序列化的数据
     template<class T>
