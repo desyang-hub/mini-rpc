@@ -20,16 +20,15 @@ class UserService
 {
 RPC_SERVICE_BIND(UserService, add, sub, print)
 public:
-    int add(const std::pair<int, int>& tuple) const {
-        return tuple.first + tuple.second;
+    int add(int a, int b) {
+        return a + b;
     }
 
-    int sub(const std::pair<int, int>& tuple) const {
-        return tuple.first - tuple.second;
+    int sub(int a, int b) {
+        return a - b;
     }
 
-    void print(const std::pair<int, int>& tuple) const {
-        std::cout << "Call print without return param" << std::endl;
-        std::cout << (tuple.first + tuple.second) << std::endl;
+    void print(int a, int b) {
+        std::cout << "print a - b: " << a - b << std::endl;
     }
 };

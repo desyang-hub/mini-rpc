@@ -6,12 +6,14 @@
 #include <unordered_map>
 #include <utility>
 #include <assert.h>
+#include <stdexcept>
 
 #include "Encoder.h"
 #include "Decoder.h"
 
 #include "Serialize.h"
 #include "functioin_traits.h"
+#include "tuple_util.h"
 
 
 /**
@@ -47,14 +49,62 @@
     10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0
 
 // 2. 单个方法的注册逻辑
+// #define _RPC_BIND_METHOD(Class, Method) \
+//     do { \
+//         auto instance = Class::GetInstance(); \
+//         using MethodType = decltype(&Class::Method); \
+//         using param_type = typename function_traits<MethodType>::param_type; \
+//         using PureParamType = typename std::remove_reference<typename std::remove_const<param_type>::type>::type; \
+//         RpcServer::bind(#Class "." #Method, [&instance](param_type param) { \
+//             return instance.Method(param); \
+//         }); \
+//     } while(0)
+
+// #define _RPC_BIND_METHOD(Class, Method) \
+//     do { \
+//         auto& instance = Class::GetInstance(); \
+//         auto instancePtr = &instance; \
+//         using MethodType = decltype(&Class::Method); \
+//         using param_tuple = typename function_traits<MethodType>::args_tuple; \
+//         using return_type = typename function_traits<MethodType>::return_type; \
+//         \
+//         RpcServer::bind(#Class "." #Method, [instancePtr](const param_tuple& received_tuple) { \
+//             if constexpr (std::is_void_v<return_type>) { \
+//                 /* 如果是 void，直接调用，不 return */ \
+//                 std::apply([instancePtr](auto&&... args) { \
+//                     instancePtr->Method(std::forward<decltype(args)>(args)...); \
+//                 }, received_tuple); \
+//             } else { \
+//                 /* 如果有返回值，return 结果 */ \
+//                 return std::apply([instancePtr](auto&&... args) { \
+//                     return instancePtr->Method(std::forward<decltype(args)>(args)...); \
+//                 }, received_tuple); \
+//             } \
+//         }); \
+//     } while(0)
+
+
 #define _RPC_BIND_METHOD(Class, Method) \
     do { \
-        auto instance = Class::GetInstance(); \
+        auto& instance = Class::GetInstance(); \
+        auto instancePtr = &instance; \
         using MethodType = decltype(&Class::Method); \
-        using param_type = typename function_traits<MethodType>::param_type; \
-        using PureParamType = typename std::remove_reference<typename std::remove_const<param_type>::type>::type; \
-        RpcServer::bind(#Class "." #Method, [&instance](param_type param) { \
-            return instance.Method(param); \
+        using param_tuple = typename function_traits<MethodType>::args_tuple; \
+        using return_type = typename function_traits<MethodType>::return_type; \
+        \
+        /* ✅ 修改：Lambda 的参数还是 tuple，但内部调用 f 时要解开 */ \
+        RpcServer::bind(#Class "." #Method, [instancePtr](const param_tuple& received_tuple) { \
+            if constexpr (std::is_void_v<return_type>) { \
+                /* 如果是 void，解开 tuple 调用 f */ \
+                rpc_apply([instancePtr](auto&&... args) { \
+                    instancePtr->Method(std::forward<decltype(args)>(args)...); \
+                }, received_tuple); \
+            } else { \
+                /* 如果有返回值，解开 tuple 调用 f 并 return */ \
+                return rpc_apply([instancePtr](auto&&... args) { \
+                    return instancePtr->Method(std::forward<decltype(args)>(args)...); \
+                }, received_tuple); \
+            } \
         }); \
     } while(0)
 
@@ -77,6 +127,13 @@
     _RPC_BIND_METHOD(Class, M2); \
     _RPC_BIND_METHOD(Class, M3); \
     _RPC_BIND_METHOD(Class, M4)
+
+#define _RPC_BIND_IMPL_6(Class, M1, M2, M3, M4, M5) \
+    _RPC_BIND_METHOD(Class, M1); \
+    _RPC_BIND_METHOD(Class, M2); \
+    _RPC_BIND_METHOD(Class, M3); \
+    _RPC_BIND_METHOD(Class, M4); \
+    _RPC_BIND_METHOD(Class, M5)
 
 // 4. 分发宏
 // 关键修改：直接将 Class 和 __VA_ARGS__ 一起传给计数器和分发器
@@ -155,75 +212,6 @@ private:
         static RPC_CONCAT(_AutoInit_, Class) RPC_CONCAT(g_auto_init_, Class); \
     }
 
-// #define RPC_SERVICE_BIND(Class, ...) \
-// private: \
-//     Class() { std::cout << #Class " Init" << std::endl; } \
-// public: \
-//     static Class& GetInstance() { \
-//         static Class cls; \
-//         return cls; \
-//     } \
-//     static void Init() { \
-//         GetInstance(); /* 确保单例被创建 */ \
-//         _RPC_BIND_ONE(Class, __VA_ARGS__) /* 这里展开注册逻辑 */ \
-//     }
-
-// ===========================================================
-
-
-// v2
-
-// --- 宏定义 ---
-
-// 1. 执行注册的辅助宏
-// #define _RPC_BIND_ONE(Class, Method, ...) \
-//     _RegisterMethod(#Class "." #Method, &Class::Method); \
-//     _RPC_EXPAND_ARGS(Class, __VA_ARGS__)
-
-// // 2. 递归控制宏
-// #define _RPC_EXPAND_ARGS(Class, ...) \
-//     _RPC_GET_ARG_2(Class, ##__VA_ARGS__)
-
-// // 3. 参数提取宏
-// #define _RPC_GET_ARG_2(Class, first, ...) \
-//     _RPC_BIND_ONE(Class, first, ##__VA_ARGS__)
-
-// // 4. 入口宏（放在类内部）
-// #define RPC_SERVICE_BIND(Class, ...) \
-// private: \
-//     Class() { std::cout << #Class " 构造函数被调用" << std::endl; } \
-//     \
-//     static void _RegisterMethod(const std::string& name, void* ptr) { \
-//         auto instance = GetInstance(); \
-//         RpcServer::bind(name, std::bind(ptr, &instance)); \
-//         std::cout << "注册成功: " << name << std::endl; \
-//     } \
-//     \
-//     /* 核心修改：增加一个静态启动器类 */ \
-//     class _AutoInit { \
-//     public: \
-//         _AutoInit() { \
-//             Class::Init(); \
-//         } \
-//     }; \
-//     \
-//     /* 5. 定义一个全局静态变量，利用其构造函数自动触发 Init */ \
-//     /* 注意：这里利用宏拼接生成唯一的变量名，防止命名冲突 */ \
-//     static _AutoInit _auto_init_instance_##Class; \
-//     \
-// public: \
-//     static Class& GetInstance() { \
-//         static Class cls; \
-//         return cls; \
-//     } \
-//     \
-//     static void Init() { \
-//         GetInstance(); \
-//         _RPC_BIND_ONE(Class, __VA_ARGS__) \
-//     }
-
-// ===========================================================
-
 
 using Bytes = std::vector<uint8_t>;
 using RpcHandler = std::function<void(const std::string&, std::string&)>;
@@ -264,18 +252,22 @@ public:
         
         using DecayFunc = typename std::decay<Func>::type;
 
-        using param_type = typename function_traits<DecayFunc>::param_type;
+        using param_type = typename function_traits<DecayFunc>::args_tuple;
         // 去除引用
-        using T = typename std::remove_reference<param_type>::type;
+        using T = typename std::decay<param_type>::type;
 
-        using R = typename function_traits<DecayFunc>::return_type;
+        using return_type = typename function_traits<DecayFunc>::return_type;
+        using R = typename std::remove_reference<return_type>::type;
 
         // 确保注册的名称是不一样的，为了确保多重不一致，可以选择将域也作为名称前缀
         assert(handlers_.count(name) == 0 && "RpcServer name ambiguity.");
 
         handlers_[name] = [f = std::forward<Func>(fun)](const std::string& body, std::string& res) {
+            std::cout << "run body: " << body << std::endl;
             // 反序列化
             auto param = Serialize::Deserialization<T>(body);
+
+            std::cout << "run body: " << body << std::endl;
 
             call_and_serialize(f, param, res);
         };
@@ -285,19 +277,50 @@ public:
 
     template<class T>
     static T call(const std::string& name, const std::string& body) {
+        std::cout << "call" << std::endl;
+        auto it = handlers_.find(name);
+
+        if (it == handlers_.end()) {
+            std::cout << "Method not support " << name << std::endl;
+            return T{};
+        }
+
         std::string res;
-        handlers_.find(name)->second(body, res);
+        try
+        {
+            std::cout << "begin: " << res << std::endl;
+            it->second(body, res);
+            std::cout << "res: " << res << std::endl;
+        }
+        catch(const std::exception& e)
+        {
+            std::cout << "error" << std::endl;
+            std::cerr << e.what() << '\n';
+            return T{};
+        }
 
         return Serialize::Deserialization<T>(res);
     }
 
-    static void call(const std::string& name, const std::string& body) {
+    static bool call(const std::string& name, const std::string& body) {
+        auto it = handlers_.find(name);
+        if (it == handlers_.end()) {
+            std::cerr << "Method un register, Plase check" << std::endl;
+            return false;
+        }
+
+        std::cout << "call type: " << body << std::endl;
+
         std::string res;
-        handlers_.find(name)->second(body, res);
-    }
-
-    template<typename ...Args>
-    void func(Args&& ...args) {
-
+        try
+        {
+            it->second(body, res);
+        }
+        catch(const std::exception& e)
+        {
+            std::cerr << e.what() << '\n';
+            return false;
+        }
+        return true;
     }
 };
