@@ -263,11 +263,8 @@ public:
         assert(handlers_.count(name) == 0 && "RpcServer name ambiguity.");
 
         handlers_[name] = [f = std::forward<Func>(fun)](const std::string& body, std::string& res) {
-            std::cout << "run body: " << body << std::endl;
             // 反序列化
             auto param = Serialize::Deserialization<T>(body);
-
-            std::cout << "run body: " << body << std::endl;
 
             call_and_serialize(f, param, res);
         };
