@@ -275,52 +275,25 @@ public:
         std::cout << "RpcServer bind " << name << std::endl;
     }
 
-    template<class T>
-    static T call(const std::string& name, const std::string& body) {
-        std::cout << "call" << std::endl;
+    static bool call(const std::string& name, const std::string& body, std::string& res) {
         auto it = handlers_.find(name);
 
         if (it == handlers_.end()) {
             std::cout << "Method not support " << name << std::endl;
-            return T{};
+            return false;
         }
-
-        std::string res;
+        
         try
         {
-            std::cout << "begin: " << res << std::endl;
             it->second(body, res);
-            std::cout << "res: " << res << std::endl;
         }
         catch(const std::exception& e)
         {
             std::cout << "error" << std::endl;
             std::cerr << e.what() << '\n';
-            return T{};
-        }
-
-        return Serialize::Deserialization<T>(res);
-    }
-
-    static bool call(const std::string& name, const std::string& body) {
-        auto it = handlers_.find(name);
-        if (it == handlers_.end()) {
-            std::cerr << "Method un register, Plase check" << std::endl;
             return false;
         }
 
-        std::cout << "call type: " << body << std::endl;
-
-        std::string res;
-        try
-        {
-            it->second(body, res);
-        }
-        catch(const std::exception& e)
-        {
-            std::cerr << e.what() << '\n';
-            return false;
-        }
         return true;
     }
 };

@@ -35,8 +35,8 @@ struct ProtocolHeader
     // 1 byte
     uint8_t compress = 0; // 压缩算法
 
-    // 1 byte
-    uint64_t request_id = 0; // 请求标识符
+    // 8 byte
+    uint64_t request_id = 200; // 请求标识符
 
     // 4 byte
     uint32_t body_len = 0; // 消息体长度
@@ -44,8 +44,8 @@ struct ProtocolHeader
     // 4 byte
     uint32_t checksum = 0; // 消息体的 CRC32 校验
 
-    // 4 byte 预留长度
-    uint32_t reserved = 0;
+    // 4 byte 预留长度, 用于表示服务名的长度吧 UserService.Login
+    uint32_t srv_name_len = 0;
 
     ProtocolHeader() = default;
 };
