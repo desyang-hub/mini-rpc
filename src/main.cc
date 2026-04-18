@@ -4,7 +4,24 @@
 #include "minirpc/common/utils.h"
 #include "minirpc/common/logger.h"
 
+#include "minirpc/core/RpcClient.h"
+#include "minirpc/core/RpcServer.h"
+
 using namespace minirpc;
+
+
+class TestService
+{
+public:
+    int add(const int a, const int b) const {
+        return a + b;
+    }
+
+RPC_SERVICE_BIND(TestService, add);
+RPC_SERVICE_STUB(TestService, add);
+};
+
+RPC_SERVICE_REGISTER(TestService);
 
 int main(int argc, char const *argv[])
 {

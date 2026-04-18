@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.20)
 project(miinrpc VERSION 0.1.0)
 
 # setting luchange standerd
-set(CMAKE_CXX_STANDARD 14) # equal -std=c++14
+set(CMAKE_CXX_STANDARD 17) # equal -std=c++14
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # set output save path
@@ -41,6 +41,21 @@ target_include_directories(common PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 
+
+# 创建静态库
+add_library(core STATIC 
+    src/minirpc/core/RpcServer.cc
+)
+# 创建动态库
+# add_library(protocol SHARED 
+#     source1.cpp 
+#     source2.cpp)
+
+# 为common添加包含目录
+target_include_directories(core PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
+
 # 添加可执行文件
 add_executable(minirpc_main
     src/main.cc
@@ -50,6 +65,7 @@ add_executable(minirpc_main
 target_link_libraries(minirpc_main 
     protocol
     common
+    core
 )
 
 # 测试相关设置

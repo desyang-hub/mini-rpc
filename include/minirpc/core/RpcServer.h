@@ -2,6 +2,7 @@
 
 
 #include "minirpc/common/Type.h"
+#include "minirpc/common/logger.h"
 #include "minirpc/common/functioin_traits.h"
 #include "minirpc/common/tuple_helper.h"
 #include "minirpc/protocol/Serialize.h"
@@ -86,19 +87,19 @@
         auto &instance = Class::GetInstance(); \
         auto instancePtr = &instance;\
         using MethodType = decltype(&Class::Method); \
-        using param_tuple = typename function_traits<MethodType>::args_tuple;                      \
-        using return_type = typename function_traits<MethodType>::return_type;\
+        using param_tuple = typename minirpc::function_traits<MethodType>::args_tuple;                      \
+        using return_type = typename minirpc::function_traits<MethodType>::return_type;\
         \
         /* ✅ 修改：Lambda 的参数还是 tuple，但内部调用 f 时要解开 */ \
-        RpcServer::bind(#Class "." #Method, [instancePtr](const param_tuple &received_tuple) { \
+        minirpc::RpcServer::bind(#Class "." #Method, [instancePtr](const param_tuple &received_tuple) { \
             if constexpr (std::is_void_v<return_type>) { \
                 /* 如果是 void，解开 tuple 调用 f */ \
-                rpc_apply([instancePtr](auto&&... args) { \
+                minirpc::rpc_apply([instancePtr](auto&&... args) { \
                     instancePtr->Method(std::forward<decltype(args)>(args)...); \
                 }, received_tuple); \
             } else { \
                 /* 如果有返回值，解开 tuple 调用 f 并 return */ \
-                return rpc_apply([instancePtr](auto&&... args) { \
+                return minirpc::rpc_apply([instancePtr](auto&&... args) { \
                     return instancePtr->Method(std::forward<decltype(args)>(args)...); \
                 }, received_tuple); \
             } }); \
@@ -157,7 +158,7 @@
 private:                                                       \
     Class()                                                    \
     {                                                          \
-        std::cout << #Class " Init" << std::endl;              \
+        /*std::cout << #Class " Init" << std::endl;*/              \
     }                                                          \
     /* 核心修改：增加一个静态启动器类 */                       \
     class _AutoInit                                            \
@@ -199,7 +200,7 @@ private:
 #define RPC_CONCAT(A, B) RPC_CONCAT_IMPL(A, B)
 
 // ===========================================================
-// --- 注册宏 (修正版) ---
+// 在Class.cc文件中使用，注册方法到RpcServer
 // ===========================================================
 #define RPC_SERVICE_REGISTER(Class)                                                  \
     namespace                                                                        \
@@ -221,10 +222,13 @@ namespace minirpc
 
     class RpcServer
     {
-    public:
-        static std::unordered_map<std::string, RpcHandler> handlers_;
+    private:
+        // static std::unordered_map<std::string, RpcHandler> handlers_;
+        static std::unordered_map<std::string, RpcHandler>& GetHandlers() {
+            static std::unordered_map<std::string, RpcHandler> handlers_;
+            return handlers_;
+        }
 
-    public:
         // 辅助函数：处理返回值为 void 的情况
         template <typename F, typename T>
         static typename std::enable_if<std::is_void<typename std::result_of<F(T)>::type>::value>::type
@@ -242,9 +246,12 @@ namespace minirpc
             res = Serialize::Serialization(f(param));
         }
 
+    public:
         template <class Func>
         static void bind(const std::string &name, Func &&fun)
         {
+
+            auto& handlers_ = GetHandlers();
 
             using DecayFunc = typename std::decay<Func>::type;
 
@@ -255,8 +262,10 @@ namespace minirpc
             using return_type = typename function_traits<DecayFunc>::return_type;
             using R = typename std::remove_reference<return_type>::type;
 
+            std::cout << handlers_.size() << std::endl;
+
             // 确保注册的名称是不一样的，为了确保多重不一致，可以选择将域也作为名称前缀
-            assert(handlers_.count(name) == 0 && "RpcServer name ambiguity.");
+            // assert(handlers_.count(name) == 0 && "RpcServer name ambiguity.");
 
             handlers_[name] = [f = std::forward<Func>(fun)](const std::string &body, std::string &res)
             {
@@ -266,32 +275,11 @@ namespace minirpc
                 call_and_serialize(f, param, res);
             };
 
-            std::cout << "RpcServer bind " << name << std::endl;
+            LOG_INFO("RpcServer bind %s", name.c_str());
+            // std::cout << "RpcServer bind " << name << std::endl;
         }
 
-        static bool call(const std::string &name, const std::string &body, std::string &res)
-        {
-            auto it = handlers_.find(name);
-
-            if (it == handlers_.end())
-            {
-                std::cout << "Method not support " << name << std::endl;
-                return false;
-            }
-
-            try
-            {
-                it->second(body, res);
-            }
-            catch (const std::exception &e)
-            {
-                std::cout << "error" << std::endl;
-                std::cerr << e.what() << '\n';
-                return false;
-            }
-
-            return true;
-        }
+        static bool call(const std::string &name, const std::string &body, std::string &res);
     };
 
 } // namespace minirpc
