@@ -27,6 +27,8 @@ target_include_directories(protocol PUBLIC
 
 # 创建静态库
 add_library(common STATIC 
+    src/minirpc/common/logger.cc
+    src/minirpc/common/timeStamp.cc
     src/minirpc/common/utils.cc
 )
 # 创建动态库
@@ -49,3 +51,28 @@ target_link_libraries(minirpc_main
     protocol
     common
 )
+
+# 测试相关设置
+option(BUILD_TESTS "Build tests" OFF)
+
+if(BUILD_TESTS)
+    enable_testing()
+    
+    # 查找Google Test
+    find_package(GTest REQUIRED)
+    
+    # 或者从源码构建Google Test（推荐方式）
+    # include(FetchContent)
+    # FetchContent_Declare(
+    #     googletest
+    #     URL https://github.com/google/googletest/archive/03597a01ee50ed33e9fd7188aa8c3dfb7f2ff3b6.zip
+    # )
+    # # For Windows: Prevent overriding the parent project's compiler/linker settings
+    # set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+    # FetchContent_MakeAvailable(googletest)
+
+
+    # 添加测试子目录
+    add_subdirectory(tests)
+endif()
+

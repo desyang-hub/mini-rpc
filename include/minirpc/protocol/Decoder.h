@@ -2,7 +2,7 @@
 
 #include "minirpc/protocol/Protocol.h"
 #include "minirpc/common/utils.h"
-#include "minirpc/protocol/Type.h"
+#include "minirpc/common/Type.h"
 
 #include <vector>
 #include <string.h>

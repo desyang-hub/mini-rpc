@@ -1,0 +1,1 @@
+cmake -DBUILD_TESTS=ON ..

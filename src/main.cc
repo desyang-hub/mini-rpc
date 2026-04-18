@@ -2,11 +2,16 @@
 #include "minirpc/protocol/Decoder.h"
 
 #include "minirpc/common/utils.h"
+#include "minirpc/common/logger.h"
 
 using namespace minirpc;
 
 int main(int argc, char const *argv[])
 {
+
+    // ENABLE_ASYNC_LOGING();
+
+    LOG_INFO("log write");
 
     std::string srvNmae = "test";
     std::string body_str = "body";

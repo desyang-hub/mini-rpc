@@ -1,7 +1,7 @@
 #pragma once
 
 #include "minirpc/protocol/Protocol.h"
-#include "minirpc/protocol/Type.h"
+#include "minirpc/common/Type.h"
 #include "minirpc/common/utils.h"
 
 
