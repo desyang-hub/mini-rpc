@@ -44,28 +44,28 @@ int main(int argc, char const *argv[])
     auto param = std::tuple<int, int>{1, 2};
 
 
-    std::tuple<int, int> tp{1, 2};
-    RpcServer::call<int>("DefaultService.add", Serialize::Serialization(tp));
+    // std::tuple<int, int> tp{1, 2};
+    // RpcServer::call<int>("DefaultService.add", Serialize::Serialization(tp));
 
-    std::string body = Serialize::Serialization(param);
+    // std::string body = Serialize::Serialization(param);
 
-    std::cout << "Methods: " << RpcServer::handlers_.size() << std::endl;
+    // std::cout << "Methods: " << RpcServer::handlers_.size() << std::endl;
 
-    auto res = RpcServer::call<int>("UserService.add", body);
-    std::cout << res << std::endl;
+    // auto res = RpcServer::call<int>("UserService.add", body);
+    // std::cout << res << std::endl;
 
-    std::cout << "Methods: " << RpcServer::handlers_.size() << std::endl;
+    // std::cout << "Methods: " << RpcServer::handlers_.size() << std::endl;
 
-    res = RpcServer::call<int>("UserService.sub", body);
-    std::cout << res << std::endl;
+    // res = RpcServer::call<int>("UserService.sub", body);
+    // std::cout << res << std::endl;
     
-    RpcServer::call("UserService.print", body);
+    // RpcServer::call("UserService.print", body);
 
-    using param_type = std::tuple<int, int>;
-    param_type param1{1, 2};
+    // using param_type = std::tuple<int, int>;
+    // param_type param1{1, 2};
 
-    std::string tuple_str = Serialize::Serialization(param1);
-    auto param_decode = Serialize::Deserialization<param_type>(tuple_str);
+    // std::string tuple_str = Serialize::Serialization(param1);
+    // auto param_decode = Serialize::Deserialization<param_type>(tuple_str);
 
 
 

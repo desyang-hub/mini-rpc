@@ -1,3 +1,7 @@
 .vscode/
 
 dependense/
+
+build/
+bin/
+lib/
