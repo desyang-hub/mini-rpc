@@ -10,7 +10,11 @@
 namespace minirpc
 {
 
-
+enum DecodeState : int8_t {
+    ERR = -1,
+    UN_FINISH = 0,
+    FINISHED = 1
+};
 
 class Decoder
 {
@@ -18,12 +22,12 @@ private:
 
 public:
     // template<class T>
-    static bool Decode(const Bytes& raw_data, ProtocolHeader& header, std::string& srvName, std::string& body) {
+    static int Decode(const Bytes& raw_data, ProtocolHeader& header, std::string& srvName, std::string& body) {
         int header_len = sizeof(header);
 
         // 1. 长度不够
         if (raw_data.size() < header_len) {
-            return false;
+            return UN_FINISH;
         }
 
         // 2. 零拷贝头部解析
@@ -32,18 +36,18 @@ public:
         // 3. 校验魔数
         if (headerPtr->magic != MAGIC_NUMBER) {
             std::cerr << "magic check error" << std::endl;
-            return false;
+            return ERR;
         }
 
         // 4. body 未完全接入
         if (raw_data.size() < header_len + headerPtr->srv_name_len + headerPtr->body_len) {
-            return false;
+            return UN_FINISH;
         }
 
         // 5. 校验
         if (simple_crc32(raw_data.data() + header_len + headerPtr->srv_name_len, headerPtr->body_len) != headerPtr->checksum) {
             std::cerr << "crc32 check faied" << std::endl;
-            return false;
+            return ERR;
         }
 
         // 6. 拷贝service name
@@ -53,16 +57,16 @@ public:
         header = *headerPtr;
         body = std::string(reinterpret_cast<const char*>(raw_data.data() + header_len + header.srv_name_len), header.body_len);
 
-        return true;
+        return FINISHED;
     }
 
 
-    static bool Decode(std::vector<uint8_t> raw_data, ProtocolHeader& header, std::string& body) {
+    static int Decode(std::vector<uint8_t> raw_data, ProtocolHeader& header, std::string& body) {
         int header_len = sizeof(header);
 
         // 1. 长度不够
         if (raw_data.size() < header_len) {
-            return false;
+            return UN_FINISH;
         }
 
         // 2. 零拷贝头部解析
@@ -71,18 +75,18 @@ public:
         // 3. 校验魔数
         if (headerPtr->magic != MAGIC_NUMBER) {
             std::cerr << "magic check error" << std::endl;
-            return false;
+            return ERR;
         }
 
         // 4. body 未完全接入
         if (raw_data.size() < header_len + header.srv_name_len + header.body_len) {
-            return false;
+            return UN_FINISH;
         }
 
         // 5. 校验
         if (simple_crc32(raw_data.data() + header_len, headerPtr->body_len) != headerPtr->checksum) {
             std::cerr << "crc32 check faied" << std::endl;
-            return false;
+            return ERR;
         }
 
         // 6. 拷贝service name
@@ -92,7 +96,39 @@ public:
         header = *headerPtr;
         body = std::string(reinterpret_cast<const char*>(raw_data.data() + header_len + header.srv_name_len), header.body_len);
 
-        return true;
+        return FINISHED;
+    }
+
+
+    static int Check(const Bytes& raw_data) {
+        int header_len = sizeof(ProtocolHeader);
+
+        // 1. 长度不够
+        if (raw_data.size() < header_len) {
+            return UN_FINISH;
+        }
+
+        // 2. 零拷贝头部解析
+        const ProtocolHeader* headerPtr = reinterpret_cast<const ProtocolHeader*>(raw_data.data());
+
+        // 3. 校验魔数
+        if (headerPtr->magic != MAGIC_NUMBER) {
+            std::cerr << "magic check error" << std::endl;
+            return ERR;
+        }
+
+        // 4. body 未完全接入
+        if (raw_data.size() < header_len + headerPtr->srv_name_len + headerPtr->body_len) {
+            return UN_FINISH;
+        }
+
+        // 5. 校验
+        if (simple_crc32(reinterpret_cast<const uint8_t*>(raw_data.data()) + header_len + headerPtr->srv_name_len, headerPtr->body_len) != headerPtr->checksum) {
+            std::cerr << "crc32 check faied" << std::endl;
+            return ERR;
+        }
+
+        return header_len + headerPtr->srv_name_len + headerPtr->body_len;
     }
 };
 

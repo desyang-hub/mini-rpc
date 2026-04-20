@@ -1,16 +1,19 @@
-#include "minirpc/protocol/Encoder.h"
-#include "minirpc/protocol/Decoder.h"
+#include <gtest/gtest.h>
+#include <iostream>
+#include <sys/socket.h>
+#include <fcntl.h>
+#include <netinet/in.h>
+#include <thread>
+#include <chrono>
+#include "nlohmann/json.hpp"
 
-#include "minirpc/common/utils.h"
-#include "minirpc/common/logger.h"
-
-#include "minirpc/core/RpcClient.h"
 #include "minirpc/core/RpcServer.h"
-
+#include "minirpc/core/RpcClient.h"
 #include "minirpc/net/TcpServer.h"
 
+using namespace std;
 using namespace minirpc;
-
+using json = nlohmann::json;
 
 class TestService
 {
@@ -22,22 +25,13 @@ public:
 RPC_SERVICE_BIND(TestService, add);
 RPC_SERVICE_STUB(TestService, add);
 };
-
 RPC_SERVICE_REGISTER(TestService);
 
-
-#include <fcntl.h>
-#include <netinet/in.h>
-#include <thread>
-#include <chrono>
-#include "nlohmann/json.hpp"
-
-using json = nlohmann::json;
 
 void cli_worker() {
 
     // sleep 3 seconds wait server lunch.
-    std::this_thread::sleep_for(std::chrono::seconds(1));
+    // std::this_thread::sleep_for(std::chrono::seconds(1));
     // 建立连接，并通过send 发送package
     // 1. 创建socket
     int clifd = socket(AF_INET, SOCK_STREAM, 0);
@@ -82,6 +76,8 @@ void cli_worker() {
 
     LOG_INFO("res: %s", reinterpret_cast<char*>(data.data()));
 
+    EXPECT_EQ(string(reinterpret_cast<const char*>(data.data())), std::to_string(3));
+
     // ProtocolHeader header;
     // std::string res;
     // Decoder::Decode(data, header, res);
@@ -91,23 +87,16 @@ void cli_worker() {
     close(clifd);
 }
 
-int main(int argc, char const *argv[])
-{
 
-    Logger::GetInstanse().setLevel(DEBUG);
 
-    
-    // ENABLE_ASYNC_LOGING();
+TEST(UNetTest, TestTcpServer) {
 
-    LOG_INFO("log write");
+    TcpServer server;   
+    std::thread server_worker([s = std::move(server)]() mutable {
+        s.serve();
+    });
+    server_worker.detach();
 
-    TcpServer server;
-
-    std::thread worker(cli_worker);
-    worker.detach();
-
-    server.serve();
-
-    
-    return 0;
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    cli_worker();
 }

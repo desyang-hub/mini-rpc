@@ -15,6 +15,7 @@
 #include <utility>
 #include <assert.h>
 #include <stdexcept>
+#include <shared_mutex>
 
 
 /**
@@ -223,6 +224,7 @@ namespace minirpc
     class RpcServer
     {
     private:
+        static std::shared_mutex hanelers_mutex_;
         // static std::unordered_map<std::string, RpcHandler> handlers_;
         static std::unordered_map<std::string, RpcHandler>& GetHandlers() {
             static std::unordered_map<std::string, RpcHandler> handlers_;
@@ -251,7 +253,6 @@ namespace minirpc
         static void bind(const std::string &name, Func &&fun)
         {
 
-            auto& handlers_ = GetHandlers();
 
             using DecayFunc = typename std::decay<Func>::type;
 
@@ -261,6 +262,12 @@ namespace minirpc
 
             using return_type = typename function_traits<DecayFunc>::return_type;
             using R = typename std::remove_reference<return_type>::type;
+
+
+            // 使用写锁
+            std::unique_lock<std::shared_mutex> lock(hanelers_mutex_);
+
+            auto& handlers_ = GetHandlers();
 
             std::cout << handlers_.size() << std::endl;
 

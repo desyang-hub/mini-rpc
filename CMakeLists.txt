@@ -52,6 +52,9 @@ add_library(net STATIC
     src/minirpc/net/EventLoop.cc
     src/minirpc/net/Poller.cc
     src/minirpc/net/Channel.cc
+    src/minirpc/net/DefaultPoller.cc
+    src/minirpc/net/EpollPoller.cc
+    src/minirpc/net/TcpServer.cc
 )
 # 创建动态库
 # add_library(protocol SHARED 
@@ -90,8 +93,9 @@ add_executable(minirpc_main
 # 配置链接库
 target_link_libraries(minirpc_main 
     protocol
-    common
     core
+    net
+    common
 )
 #end =============== main ===============
 

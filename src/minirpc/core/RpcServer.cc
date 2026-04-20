@@ -2,10 +2,14 @@
 
 namespace minirpc
 {
-
+    
+std::shared_mutex RpcServer::hanelers_mutex_;
 
 bool RpcServer::call(const std::string &name, const std::string &body, std::string &res)
 {
+    // 使用读锁
+    std::shared_lock<std::shared_mutex> lock(hanelers_mutex_);
+
     auto& handlers_ = GetHandlers();
     auto it = handlers_.find(name);
 
