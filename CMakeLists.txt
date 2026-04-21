@@ -37,7 +37,8 @@ add_library(common STATIC
 
 # 为common添加包含目录
 target_include_directories(common PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR}/include
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:include>  # 安装后头文件会放到 include 目录
 )
 #end =============== common ===============
 
@@ -55,10 +56,14 @@ add_library(core STATIC
 
 # 为common添加包含目录
 target_include_directories(core PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR}/include
-    ${nlohmann_json_SOURCE_DIR}/include
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:include>  # 安装后头文件会放到 include 目录
 )
-target_link_libraries(core PRIVATE nlohmann_json::nlohmann_json)
+target_link_libraries(core PRIVATE 
+    net
+    protocol
+    common
+)
 #end =============== core ===============
 
 #start=============== net ===============
@@ -79,10 +84,13 @@ add_library(net STATIC
 
 # 为net添加包含目录
 target_include_directories(net PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR}/include
-    ${nlohmann_json_SOURCE_DIR}/include
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:include>  # 安装后头文件会放到 include 目录
 )
-target_link_libraries(net PRIVATE nlohmann_json::nlohmann_json)
+target_link_libraries(net PRIVATE 
+    protocol
+    common
+)
 #end =============== net ===============
 
 
@@ -98,10 +106,13 @@ add_library(protocol STATIC
 
 # 为protocol添加包含目录
 target_include_directories(protocol PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR}/include
-    ${nlohmann_json_SOURCE_DIR}/include
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:include>  # 安装后头文件会放到 include 目录
 )
-target_link_libraries(protocol PRIVATE nlohmann_json::nlohmann_json)
+target_link_libraries(protocol PUBLIC
+    common
+    nlohmann_json::nlohmann_json
+)
 
 #end =============== protocol ===============
 
@@ -112,7 +123,7 @@ add_executable(minirpc_main
 )
 
 # 配置链接库
-target_link_libraries(minirpc_main 
+target_link_libraries(minirpc_main PRIVATE
     protocol
     core
     net
@@ -149,26 +160,47 @@ endif()
 
 
 # ================== Export Configuration ==================
-# 安装目标 (Install Targets)
+# ================== Export Configuration ==================
+include(CMakePackageConfigHelpers)
+
+# 生成版本文件
+write_basic_package_version_file(
+    "${CMAKE_CURRENT_BINARY_DIR}/MiniRpcConfigVersion.cmake"
+    VERSION ${PROJECT_VERSION}
+    COMPATIBILITY SameMajorVersion
+)
+
+# 生成配置文件（使用模板）
+configure_package_config_file(
+    cmake/MiniRpcConfig.cmake.in
+    "${CMAKE_CURRENT_BINARY_DIR}/MiniRpcConfig.cmake"
+    INSTALL_DESTINATION lib/cmake/MiniRpc
+)
+
+# 安装导出目标文件
+install(EXPORT minirpc
+    FILE MiniRpcTargets.cmake
+    NAMESPACE minirpc::
+    DESTINATION lib/cmake/MiniRpc
+)
+
+# 安装配置文件和版本文件
+install(FILES
+    "${CMAKE_CURRENT_BINARY_DIR}/MiniRpcConfig.cmake"
+    "${CMAKE_CURRENT_BINARY_DIR}/MiniRpcConfigVersion.cmake"
+    DESTINATION lib/cmake/MiniRpc
+)
+
+# 安装头文件和库（已有，无需修改）
 install(TARGETS common core net protocol
-    EXPORT minirpc # 这一行是关键，确保导出集生效
+    EXPORT minirpc
     ARCHIVE DESTINATION lib
     LIBRARY DESTINATION lib
     RUNTIME DESTINATION bin
     INCLUDES DESTINATION include
 )
 
-
-
-# 安装头文件
 install(DIRECTORY include/ DESTINATION include)
-
-# 导出 CMake 配置文件
-install(EXPORT minirpc
-    FILE MiniRpcConfig.cmake
-    NAMESPACE minirpc::
-    DESTINATION lib/cmake/MiniRpc
-)
 
 # ================== CPack Configuration ==================
 # 配置打包工具 (生成 .deb, .rpm, .zip 等)
