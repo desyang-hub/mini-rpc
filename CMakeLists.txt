@@ -58,6 +58,7 @@ target_include_directories(core PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/include
     ${nlohmann_json_SOURCE_DIR}/include
 )
+target_link_libraries(core PRIVATE nlohmann_json::nlohmann_json)
 #end =============== core ===============
 
 #start=============== net ===============
@@ -81,6 +82,7 @@ target_include_directories(net PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/include
     ${nlohmann_json_SOURCE_DIR}/include
 )
+target_link_libraries(net PRIVATE nlohmann_json::nlohmann_json)
 #end =============== net ===============
 
 
