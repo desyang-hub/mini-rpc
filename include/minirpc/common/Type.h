@@ -1,6 +1,8 @@
 #pragma once
 
 #include <iostream>
+#include <cstdint>   // 添加这行
+#include <cstddef>   // 可选，提供 size_t
 #include <vector>
 #include <functional>
 
