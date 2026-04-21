@@ -24,7 +24,16 @@ void Logger::enable_async_log_write() {
     async_log_write_thread_ = std::thread(&Logger::async_log_write, this);
 }
 
-Logger::Logger() {
+Logger::Logger() : log_level_(INFO) {
+    // 通过环境变量来设置是否开启异步日志
+    auto async_log = getenv("ENABLE_ASYNC_LOGGING");
+    if (async_log == nullptr) {
+        log("env variable ENABLE_ASYNC_LOGGING unset, lunch default logging config, set env ENABLE_ASYNC_LOGGING=ON can lunch async logging mode.", INFO);
+    }
+    else {
+        enable_async_log_write();
+        log("ENABLE_ASYNC_LOGGING mode set, lunch Asynchronous logs.", INFO);
+    }
 }
 
 Logger::~Logger() {

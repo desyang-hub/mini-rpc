@@ -1,8 +1,8 @@
 #pragma once
 
 #include "minirpc/common/logger.h"
+#include "minirpc/common/Buffer.h"
 #include "minirpc/protocol/Decoder.h"
-#include "minirpc/net/Buffer.h"
 #include "minirpc/protocol/Protocol.h"
 
 #include <iostream>
@@ -71,12 +71,12 @@ public:
         return 0;
     }
 
-    bool decode(std::string& body, std::string& srv_name) {
+    bool decode(std::string& body, std::string& srv_name, ProtocolHeader& header) {
         std::vector<uint8_t> bytes(pkg_len_);
         
         buf_.get_package_data(bytes.data(), pkg_len_);
 
-        bool is_success = Decoder::Decode(bytes, header_, srv_name, body);
+        bool is_success = Decoder::Decode(bytes, header, srv_name, body);
         // 标记为-1
         pkg_len_ = -1;
 

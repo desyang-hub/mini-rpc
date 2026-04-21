@@ -269,7 +269,7 @@ namespace minirpc
 
             auto& handlers_ = GetHandlers();
 
-            std::cout << handlers_.size() << std::endl;
+            // std::cout << handlers_.size() << std::endl;
 
             // 确保注册的名称是不一样的，为了确保多重不一致，可以选择将域也作为名称前缀
             // assert(handlers_.count(name) == 0 && "RpcServer name ambiguity.");
@@ -283,7 +283,6 @@ namespace minirpc
             };
 
             LOG_INFO("RpcServer bind %s", name.c_str());
-            // std::cout << "RpcServer bind " << name << std::endl;
         }
 
         static bool call(const std::string &name, const std::string &body, std::string &res);

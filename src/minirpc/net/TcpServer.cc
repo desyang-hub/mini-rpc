@@ -115,7 +115,8 @@ void TcpServer::ClienHandler(TcpServer* server, Conn* c) {
             std::string body;
             std::string srv_name;
 
-            bool is_success = c->decode(body, srv_name);
+            ProtocolHeader header;
+            bool is_success = c->decode(body, srv_name, header);
             if (is_success) {
                 std::string res;
                 is_success = RpcServer::call(srv_name, body, res);
@@ -124,8 +125,10 @@ void TcpServer::ClienHandler(TcpServer* server, Conn* c) {
                     LOG_ERROR("Rpc call failed");
                 }
 
-                // 将消息写回
-                if (send(c->fd(), res.data(), res.size(), 0) == -1) {
+                auto bytes = Encoder::Encode(header, res);
+
+                // 将消息写回, 通过包发送
+                if (send(c->fd(), bytes.data(), bytes.size(), 0) == -1) {
                     LOG_ERROR("send error");
                     break;
                 }

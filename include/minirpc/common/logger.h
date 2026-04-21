@@ -60,9 +60,9 @@ if (minirpc::Logger::GetInstanse().getLevel() >= minirpc::DEBUG) {              
 namespace minirpc
 {
 enum LoggerLevel {
-    INFO,
-    ERROR,
     FATAL,
+    ERROR,
+    INFO,
     DEBUG
 };
 

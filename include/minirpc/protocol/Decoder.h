@@ -61,12 +61,12 @@ public:
     }
 
 
-    static int Decode(std::vector<uint8_t> raw_data, ProtocolHeader& header, std::string& body) {
+    static bool Decode(std::vector<uint8_t> raw_data, ProtocolHeader& header, std::string& body) {
         int header_len = sizeof(header);
 
         // 1. 长度不够
         if (raw_data.size() < header_len) {
-            return UN_FINISH;
+            return false;
         }
 
         // 2. 零拷贝头部解析
@@ -75,18 +75,18 @@ public:
         // 3. 校验魔数
         if (headerPtr->magic != MAGIC_NUMBER) {
             std::cerr << "magic check error" << std::endl;
-            return ERR;
+            return false;
         }
 
         // 4. body 未完全接入
         if (raw_data.size() < header_len + header.srv_name_len + header.body_len) {
-            return UN_FINISH;
+            return false;
         }
 
         // 5. 校验
         if (simple_crc32(raw_data.data() + header_len, headerPtr->body_len) != headerPtr->checksum) {
             std::cerr << "crc32 check faied" << std::endl;
-            return ERR;
+            return false;
         }
 
         // 6. 拷贝service name
@@ -96,7 +96,7 @@ public:
         header = *headerPtr;
         body = std::string(reinterpret_cast<const char*>(raw_data.data() + header_len + header.srv_name_len), header.body_len);
 
-        return FINISHED;
+        return true;
     }
 
 

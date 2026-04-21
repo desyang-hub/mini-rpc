@@ -34,6 +34,7 @@ target_include_directories(common PUBLIC
 # 创建静态库
 add_library(core STATIC 
     src/minirpc/core/RpcServer.cc
+    src/minirpc/core/RpcClient.cc
 )
 # 创建动态库
 # add_library(protocol SHARED 
@@ -55,6 +56,7 @@ add_library(net STATIC
     src/minirpc/net/DefaultPoller.cc
     src/minirpc/net/EpollPoller.cc
     src/minirpc/net/TcpServer.cc
+    src/minirpc/net/utils.cc
 )
 # 创建动态库
 # add_library(protocol SHARED 
@@ -71,7 +73,7 @@ target_include_directories(net PUBLIC
 #start=============== protocol ===============
 # 创建静态库
 add_library(protocol STATIC 
-    src/minirpc/protocol/Serialize.cc 
+    src/minirpc/protocol/Serialize.cc
 )
 # 创建动态库
 # add_library(protocol SHARED 

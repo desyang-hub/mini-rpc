@@ -19,8 +19,12 @@ public:
         return a + b;
     }
 
-RPC_SERVICE_BIND(TestService, add);
-RPC_SERVICE_STUB(TestService, add);
+    int sub(const int a, const int b) const {
+        return a - b;
+    }
+
+RPC_SERVICE_BIND(TestService, add, sub);
+RPC_SERVICE_STUB(TestService, add, sub);
 };
 
 RPC_SERVICE_REGISTER(TestService);
@@ -31,6 +35,7 @@ RPC_SERVICE_REGISTER(TestService);
 #include <thread>
 #include <chrono>
 #include "nlohmann/json.hpp"
+#include <stdlib.h>
 
 using json = nlohmann::json;
 
@@ -95,19 +100,36 @@ int main(int argc, char const *argv[])
 {
 
     Logger::GetInstanse().setLevel(DEBUG);
-
-    
     // ENABLE_ASYNC_LOGING();
-
-    LOG_INFO("log write");
 
     TcpServer server;
 
-    std::thread worker(cli_worker);
-    worker.detach();
+    std::thread server_worker([s = std::move(server)]() mutable {
+        s.serve(8080);
+    });
 
-    server.serve();
+    server_worker.detach();
 
+
+    // 休息100ms
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+    // 启用客户端
+    std::thread cli_loop(&RpcClient::ReadLoop);
+
+    cli_loop.detach();
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+    TestService::TestService_Stub stub;
+
+    int res = stub.add(1, 2);
+
+    LOG_INFO("res: %d", res);
+
+    res = stub.sub(1, 2);
+
+    LOG_INFO("res: %d", res);
     
     return 0;
 }

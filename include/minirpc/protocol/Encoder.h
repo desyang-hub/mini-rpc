@@ -24,6 +24,8 @@ public:
         // 计算checksum
         header.checksum = simple_crc32(reinterpret_cast<const uint8_t*>(body.data()), header.body_len);
 
+        header.srv_name_len = 0;
+
         std::vector<uint8_t> packet(sizeof(header) + header.srv_name_len + header.body_len);
 
         // 将header拷贝到packet中
