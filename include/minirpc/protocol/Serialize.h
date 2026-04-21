@@ -5,6 +5,8 @@
 #include "minirpc/protocol/ProtobufSerialize.h"
 
 #include <iostream>
+#include <cstdint>   // 添加这行
+#include <cstddef>   // 可选，提供 size_t
 
 namespace minirpc
 {

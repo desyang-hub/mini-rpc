@@ -1,6 +1,8 @@
 #pragma once
 // 用于定义协议结构体
 #include <iostream>
+#include <cstdint>   // 添加这行
+#include <cstddef>   // 可选，提供 size_t
 
 namespace minirpc
 {

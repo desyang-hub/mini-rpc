@@ -3,6 +3,8 @@
 #include <tuple>
 #include <utility> // std::index_sequence, std::make_index_sequence
 #include <iostream>
+#include <cstdint>   // 添加这行
+#include <cstddef>   // 可选，提供 size_t
 
 namespace minirpc
 {
