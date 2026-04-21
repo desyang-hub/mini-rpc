@@ -3,7 +3,7 @@ name: Release minirpc
 on:
   push:
     tags:
-      - 'v*' # 仅当推送以 v 开头的标签时触发
+      - 'v*'
 
 jobs:
   build:
@@ -17,19 +17,20 @@ jobs:
           cd build
           cmake .. -DCMAKE_BUILD_TYPE=Release
 
-      - name: Build and Package
+      - name: Build
         run: |
           cd build
-          # 运行 install，将文件复制到临时目录
-          cmake --install . --prefix ./install_tmp
-          
-          # 使用 CPack 打包 install_tmp 目录
-          cpack -G ZIP -B ./install_tmp
-          
+          cmake --build . --config Release
+
+      - name: Package
+        run: |
+          cd build
+          cpack -G ZIP -C Release   # 自动生成 ZIP 包
+
       - name: Upload Release Asset
         uses: actions/upload-release-asset@v1
         with:
           upload_url: ${{ github.event.repository.releases.latest.upload_url }}
-          asset_path: ./build/install_tmp/minirpc-*.zip
+          asset_path: ./build/minirpc-*.zip
           asset_name: minirpc-${{ github.ref_name }}.zip
           asset_content_type: application/zip

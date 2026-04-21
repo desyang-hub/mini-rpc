@@ -7,8 +7,8 @@ set(CMAKE_CXX_STANDARD 17) # equal -std=c++14
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # set output save path
-set(LIBRARY_OUTPUT_PATH ${CMAKE_SOURCE_DIR}/lib)
-set(EXECUTABLE_OUTPUT_PATH ${CMAKE_SOURCE_DIR}/bin)
+# set(LIBRARY_OUTPUT_PATH ${CMAKE_SOURCE_DIR}/lib)
+# set(EXECUTABLE_OUTPUT_PATH ${CMAKE_SOURCE_DIR}/bin)
 
 
 include(FetchContent)
@@ -20,6 +20,10 @@ FetchContent_Declare(
     GIT_TAG          v3.11.2
 )
 FetchContent_MakeAvailable(nlohmann_json)
+
+add_library(nlohmann_json_interface INTERFACE)
+target_include_directories(nlohmann_json_interface INTERFACE 
+    ${nlohmann_json_SOURCE_DIR}/include)
 #end =============== dependencies ===============
 
 # 编译链接库
@@ -37,7 +41,8 @@ add_library(common STATIC
 
 # 为common添加包含目录
 target_include_directories(common PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR}/include
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:include>  # 安装后头文件会放到 include 目录
 )
 #end =============== common ===============
 
@@ -55,10 +60,14 @@ add_library(core STATIC
 
 # 为common添加包含目录
 target_include_directories(core PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR}/include
-    ${nlohmann_json_SOURCE_DIR}/include
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:include>  # 安装后头文件会放到 include 目录
 )
-target_link_libraries(core PRIVATE nlohmann_json::nlohmann_json)
+target_link_libraries(core PRIVATE 
+    net
+    protocol
+    common
+)
 #end =============== core ===============
 
 #start=============== net ===============
@@ -79,10 +88,13 @@ add_library(net STATIC
 
 # 为net添加包含目录
 target_include_directories(net PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR}/include
-    ${nlohmann_json_SOURCE_DIR}/include
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:include>  # 安装后头文件会放到 include 目录
 )
-target_link_libraries(net PRIVATE nlohmann_json::nlohmann_json)
+target_link_libraries(net PRIVATE 
+    protocol
+    common
+)
 #end =============== net ===============
 
 
@@ -98,10 +110,13 @@ add_library(protocol STATIC
 
 # 为protocol添加包含目录
 target_include_directories(protocol PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR}/include
-    ${nlohmann_json_SOURCE_DIR}/include
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:include>  # 安装后头文件会放到 include 目录
 )
-target_link_libraries(protocol PRIVATE nlohmann_json::nlohmann_json)
+target_link_libraries(protocol PUBLIC
+    common
+    nlohmann_json_interface
+)
 
 #end =============== protocol ===============
 
@@ -112,7 +127,7 @@ add_executable(minirpc_main
 )
 
 # 配置链接库
-target_link_libraries(minirpc_main 
+target_link_libraries(minirpc_main PRIVATE
     protocol
     core
     net
@@ -149,26 +164,21 @@ endif()
 
 
 # ================== Export Configuration ==================
-# 安装目标 (Install Targets)
-install(TARGETS common core net protocol
-    EXPORT minirpc # 这一行是关键，确保导出集生效
+# 安装头文件和库（已有，无需修改）
+install(TARGETS common core net protocol nlohmann_json_interface
+    EXPORT minirpc
     ARCHIVE DESTINATION lib
     LIBRARY DESTINATION lib
     RUNTIME DESTINATION bin
     INCLUDES DESTINATION include
 )
 
-
-
-# 安装头文件
 install(DIRECTORY include/ DESTINATION include)
 
-# 导出 CMake 配置文件
-install(EXPORT minirpc
-    FILE MiniRpcConfig.cmake
-    NAMESPACE minirpc::
-    DESTINATION lib/cmake/MiniRpc
-)
+# 安装 nlohmann_json 的头文件（重要！）
+install(DIRECTORY ${nlohmann_json_SOURCE_DIR}/include/ 
+    DESTINATION include
+    FILES_MATCHING PATTERN "*.hpp")
 
 # ================== CPack Configuration ==================
 # 配置打包工具 (生成 .deb, .rpm, .zip 等)
