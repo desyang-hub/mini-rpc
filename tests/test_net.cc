@@ -22,9 +22,14 @@ public:
         return a + b;
     }
 
-RPC_SERVICE_BIND(TestService, add);
-RPC_SERVICE_STUB(TestService, add);
+    int sub(const int a, const int b) const {
+        return a - b;
+    }
+
+RPC_SERVICE_BIND(TestService, add, sub);
+RPC_SERVICE_STUB(TestService, add, sub);
 };
+
 RPC_SERVICE_REGISTER(TestService);
 
 
@@ -97,6 +102,21 @@ TEST(UNetTest, TestTcpServer) {
     });
     server_worker.detach();
 
-    std::this_thread::sleep_for(std::chrono::milliseconds(100));
-    cli_worker();
+    // 启用客户端
+    std::thread cli_loop(&RpcClient::ReadLoop);
+
+    cli_loop.detach();
+
+    // 等待服务启动
+    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+
+    TestService::TestService_Stub stub;
+
+    int res = stub.add(1, 2);
+
+    EXPECT_EQ(res, 3);
+
+    res = stub.sub(1, 2);
+
+    EXPECT_EQ(res, -1);
 }
