@@ -1,6 +1,7 @@
 #include "minirpc/net/TcpServer.h"
 #include "minirpc/common/logger.h"
 #include "minirpc/core/RpcServer.h"
+#include "minirpc/net/utils.h"
 
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -11,15 +12,6 @@
 
 namespace minirpc
 {
-
-void set_nonblocking(int fd) {
-    int flags = fcntl(fd, F_GETFL, 0);
-    if (flags == -1) {
-        perror("fcntl get error");
-        return;
-    }
-    fcntl(fd, F_SETFL, flags | O_NONBLOCK);
-}    
 
     TcpServer::TcpServer() {
 
@@ -116,13 +108,15 @@ void TcpServer::ClienHandler(TcpServer* server, Conn* c) {
             std::string srv_name;
 
             ProtocolHeader header;
+            // 是否成功解码
             bool is_success = c->decode(body, srv_name, header);
             if (is_success) {
                 std::string res;
                 is_success = RpcServer::call(srv_name, body, res);
 
                 if (!is_success) {
-                    LOG_ERROR("Rpc call failed");
+                    header.code = FAILED;
+                    res = "";
                 }
 
                 auto bytes = Encoder::Encode(header, res);
@@ -132,11 +126,6 @@ void TcpServer::ClienHandler(TcpServer* server, Conn* c) {
                     LOG_ERROR("send error");
                     break;
                 }
-            }
-            // 异常了，需要关闭连接
-            else {
-                server->removeConn(c);
-                break;
             }
         }
     }

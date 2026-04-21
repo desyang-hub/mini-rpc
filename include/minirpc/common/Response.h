@@ -1,9 +1,10 @@
 #pragma once
 
 #include <iostream>
+#include <cstdint>
 
 struct Response
 {
-    bool state;
+    uint8_t state;
     std::string data;
 };

@@ -17,6 +17,7 @@ bool RpcServer::call(const std::string &name, const std::string &body, std::stri
     {
         LOG_ERROR("Method not support %s", name.c_str());
         // std::cout << "Method not support " << name << std::endl;
+        res = "Method not support";
         return false;
     }
 
@@ -28,6 +29,7 @@ bool RpcServer::call(const std::string &name, const std::string &body, std::stri
     {
         LOG_ERROR("%s", e.what());
         // std::cerr << e.what() << '\n';
+        res = e.what();
         return false;
     }
 

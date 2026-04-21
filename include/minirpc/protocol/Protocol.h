@@ -24,6 +24,13 @@ enum SerializeType : uint8_t {
     SERIALIZE_PROTOBUF = 2
 };
 
+// 4. 定义StateCode 其实可以划分很多种类型，就不用传输string了
+enum StateCode : uint8_t {
+    SUCCESS = 0,
+    FAILED = 1,
+    TIMEOUT
+};
+
 // 定义协议结构体
 // 2 + 1x4 + 8 + 4 + 4 + 4 -> 26 个 -> 4x8 = 32
 #pragma pack(push, 1)
@@ -56,11 +63,14 @@ struct ProtocolHeader
     // 4 byte 预留长度, 用于表示服务名的长度吧 UserService.Login
     uint32_t srv_name_len = 0;
 
+    // 1 byte
+    uint8_t code = 0;
+
     ProtocolHeader() = default;
 };
 #pragma pack(pop)
 
-static_assert(sizeof(ProtocolHeader) == 26, "Header size mismatch");
+static_assert(sizeof(ProtocolHeader) == 27, "Header size mismatch");
 
 
 

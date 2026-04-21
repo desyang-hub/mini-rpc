@@ -7,8 +7,10 @@
 #include "minirpc/protocol/Serialize.h"
 #include "minirpc/protocol/Encoder.h"
 #include "minirpc/protocol/Decoder.h"
+#include "minirpc/protocol/Protocol.h"
 #include "minirpc/core/RpcServer.h"
 #include "minirpc/net/utils.h"
+#include "minirpc/net/Conn.h"
 
 
 #include <iostream>
@@ -18,6 +20,8 @@
 #include <vector>
 #include <unordered_map>
 #include <future>
+#include <atomic>
+#include <sys/epoll.h>
 
 // rpc client 用于为rpc调用的实现，ServiceCli调用函数的底层代理就会由RpcClient来实现
 
@@ -42,7 +46,7 @@
     /* ✅ 修改点：使用可变参数模板 (Args&&... args)，允许用户直接传参 */ \
     template<typename... Args> \
     ReturnType_##Method Method(Args&&... args) { \
-        static_assert(std::is_same_v<ArgsTuple_##Method, std::tuple<std::decay_t<Args>...>>, "Parameter types mismatch for method " #Method); \
+        static_assert(std::is_convertible_v<std::tuple<std::decay_t<Args>...>, ArgsTuple_##Method>, "Parameter types mismatch for method " #Method); \
         std::string srvName = #Class "." #Method; \
         \
         /* ✅ 修改点：在函数内部手动打包成 tuple */ \
@@ -51,12 +55,14 @@
         RetType_##Method ret_val; \
         \
         if constexpr (std::is_void_v<ReturnType_##Method>) { \
-            if (!minirpc::RpcClient::call(srvName, args_tuple)) { \
-                throw RpcException("RPC Call Failed: " + srvName); \
+            uint8_t code = minirpc::RpcClient::GetInstance().call(srvName, args_tuple); \
+            if (code != minirpc::SUCCESS) { \
+                throw minirpc::RpcException("RPC Call Failed: err_code=" + std::to_string(code)); \
             } \
         } else { \
-            if (!minirpc::RpcClient::call(srvName, args_tuple, ret_val)) { \
-                throw RpcException("RPC Call Failed: " + srvName); \
+            uint8_t code = minirpc::RpcClient::GetInstance().call(srvName, args_tuple, ret_val); \
+            if (code != minirpc::SUCCESS) { \
+                throw minirpc::RpcException("RPC Call Failed: err_code=" + std::to_string(code)); \
             } \
         } \
         \
@@ -118,6 +124,7 @@
     public: /* ✅ 修复点：确保生成的类是 public 的 */ \
     class Class##_Stub { \
     public: \
+        Class##_Stub() {minirpc::RpcClient::GetInstance();} \
         /* 展开具体的方法 */ \
         _RPC_STUB_ALL(Class, __VA_ARGS__) \
     }; \
@@ -127,56 +134,100 @@ private:
 
 namespace minirpc
 {
-    
-class RpcServerDemo
-{
-public:
-    static std::vector<uint8_t> RecvMsg(const std::vector<uint8_t>& bytes) {
-        // 远程解析数据
-        ProtocolHeader header;
-        std::string srvName;
-        std::string body;
-        bool is_success = Decoder::Decode(bytes, header, srvName, body);
-
-        std::string res;
-        if  (is_success) {
-            is_success = RpcServer::call(srvName, body, res);
-        }
-
-        if (!is_success) {
-            header.request_id = 300;
-        }
-
-        header.magic = MAGIC_NUMBER;
-        header.srv_name_len = 0;
-
-        return Encoder::Encode(header, res, MSG_RESPONSE);
-    }
-};
-
-
 const int MAX_PACKAGE_LEN = 2048;
 
 class RpcClient
 {
 
 private:
-    static int fd_;
-    static uint64_t request_id_;
+    int sockfd_;
+    int epollfd_;
+    uint64_t request_id_;
+    int wakeup_fd_;   // eventfd 或 pipe 读端
     // 这里最好设计成 {bool , string}
-    static std::unordered_map<uint64_t, std::promise<Response>> promiseMap_; // <request—id, promise>
+    std::unordered_map<uint64_t, std::promise<Response>> promiseMap_; // <request—id, promise>
 
-    static std::mutex send_lock_;
+    std::mutex send_lock_;
+    std::atomic_bool is_running_ = true;
+
+    std::thread loop_woker_;
+
+    std::unordered_map<int, Conn*> connMap_;
+
+    // 私有构造，只允许单例，仅在第一个Stub创建时初始化
+    RpcClient();
+
+    
+    ~RpcClient();
+
+    void removeConn(Conn* c) {
+        auto it = connMap_.find(c->fd());
+    
+        // not exists
+        if (it == connMap_.end()) {
+            close(c->fd());
+            return;
+        }
+    
+        if (epoll_ctl(epollfd_, EPOLL_CTL_DEL, c->fd(), nullptr) == -1) {
+            LOG_ERROR("epoll ctl error");
+        }
+        close(c->fd());
+        connMap_.erase(it);
+        delete c;
+    }
+
+
+    void MessageHandler(Conn* c) {
+        // 这里做的就是io处理逻辑，默认使用ET触发模式，需要一次处理完数据
+        int cli_fd = c->fd();
+    
+        // ET, 必须要一次处理完，直到缓存空了
+        // 接收用户消息，并写回
+        while (true) {
+            int len = c->readMsg();
+            
+            // 出错了，或断开了
+            if (len < 0) {
+                LOG_DEBUG("User %d disconnected.", c->fd());
+                removeConn(c);
+                break;
+            }
+            else if (len == 0) {
+                LOG_DEBUG("continue recv message.");
+                break;
+            }
+            else {
+                // TODO: 这里理论上应该放回调，当读入了消息就该回调接口
+                // 解码读取消息，拷贝消息
+                std::string body;
+                std::string srv_name;
+    
+                ProtocolHeader header;
+
+                bool is_success = c->decode(body, srv_name, header);
+                if (is_success) {
+                    auto it = promiseMap_.find(header.request_id);
+                    assert(it != promiseMap_.end());
+                    it->second.set_value({header.code, body});                    
+                }
+            }
+        }
+    }
 
 public:
-    // 此处实现一个Rpc用户端读循环，用于不断从io流读取数据
-    static void ReadLoop() {
-        int port = 8080;
+    static RpcClient& GetInstance();
 
-        {
-            std::lock_guard<std::mutex> lock(send_lock_); 
-            fd_ = Dial(port);
-        }
+    // 此处实现一个Rpc用户端读循环，用于不断从io流读取数据
+    void ReadLoop() {
+        // int port = 8080;
+
+        // {
+        //     std::lock_guard<std::mutex> lock(send_lock_); 
+        //     sockfd_ = Dial(port);
+        // }
+
+        set_nonblocking(sockfd_);
         
         int save_errno;
         ProtocolHeader header;
@@ -184,103 +235,121 @@ public:
         int pkg_len = -1;
         std::vector<uint8_t> data(MAX_PACKAGE_LEN);
 
-        RingBuffer buf(1024);
 
-        // 不断读取消息
-        while (true) {
-            int len = buf.read_fd(fd_, &save_errno);
+        // 使用epoll管理用户端
+        // 1. 创建epoll
+        epollfd_ = epoll_create1(EPOLL_CLOEXEC);
+        if (epollfd_ < 0) {
+            // perror("epoll create error");
+            close(sockfd_);
+            LOG_FATAL("epoll create error");
+        }
 
-            // 读取了数据
-            if (len > 0) {
-                if (pkg_len == -1 && buf.readable_bytes() >= header_len) {
-                    buf.peek_data(&header, header_len);
-                    pkg_len = header_len + header.body_len + header.srv_name_len;
+        // 2. 注册fd监听到epoll
+        epoll_event ev;
+        connMap_[sockfd_] = new Conn(sockfd_);
+        ev.events = EPOLLIN | EPOLLET; // ET 触发，只要通知了就要一直读，直到空了(EAGAIN, EWOULDBLOCK)
+        ev.data.ptr = connMap_[sockfd_];
+        
+        LOG_INFO("Epoll ET Mode epfd=%d", epollfd_);
+        // std::cout << "Epoll ET Mode epfd=" << epollfd << std::endl;
+
+        if (epoll_ctl(epollfd_, EPOLL_CTL_ADD, sockfd_, &ev) < 0) {
+            // perror("epoll add sockfd error");
+            close(sockfd_);
+            close(epollfd_);
+            // exit(-1);
+            LOG_FATAL("epoll add sockfd error");
+        }
+
+
+        epoll_event wake_ev;
+        wake_ev.events = EPOLLIN | EPOLLET;
+        wake_ev.data.ptr = new Conn(wakeup_fd_);
+        if (epoll_ctl(epollfd_, EPOLL_CTL_ADD, wakeup_fd_, &wake_ev) < 0) {
+            LOG_FATAL("epoll add wakeup_fd error");
+        }
+
+        // 3. 进行事件监听
+        // epoll_event events[1024];
+        std::vector<epoll_event> events(128);
+
+        while (is_running_.load()) {
+            // 阻塞等待，返回触发的事件个数
+            int numEvents = epoll_wait(epollfd_, events.data(), events.size(), -1); // -1 表示无限等待
+
+            LOG_INFO("client numEvelents %d", numEvents);
+
+            std::cout << "is_running_: " << is_running_.load() << std::endl;
+
+            int saveErrno = errno;
+
+            if (numEvents == -1) {
+                if (errno == EINTR) continue;
+                if (errno == EBADF) {
+                    // fd 已经被关闭了，直接退出
+                    break;
                 }
+                perror("epoll wait error");
+                break;
+            }
 
-                // 可以读数据
-                if (buf.readable_bytes() >= pkg_len) {
-                    buf.get_package_data(data.data(), pkg_len);
-                    
-                    std::string body;
-                    bool is_success = Decoder::Decode(data, header, body);
-
-                    // 成功了的话将结果返回回去
-                    assert(promiseMap_.find(header.request_id) != promiseMap_.end() && "request id not exists.");
-
-                    promiseMap_[header.request_id].set_value({is_success, body});
+            if (numEvents == 0) {
+                // 检查一下 fd 是否还有效
+                // 如果 fd 已经无效，直接退出
+                if (sockfd_ <= 0) {
+                    break;
                 }
-            } // 连接断开，尝试重连
-            else if (len == 0) {
-                std::lock_guard<std::mutex> lock(send_lock_); 
+                continue;
+            }
+            
+            bool is_close = false;
+            // 处理被激活的事件
+            for (int i = 0; i < numEvents; ++i) {
+                Conn* c = static_cast<Conn*>(events[i].data.ptr);
+                int fd = c->fd();
 
-                
-                close(fd_);
-                size_t retry_cnt = 0;
-                while (retry_cnt < 5) {
-                    try
-                    {
-                        fd_ = Dial(port);
-                        LOG_ERROR("Retry Connect success fd=%d", fd_);
+                if (fd == wakeup_fd_) {
+                    uint64_t val;
+                    read(wakeup_fd_, &val, sizeof(val)); // 清空事件
+                    // 唤醒后检查退出标志，若为 false 则跳出循环
+                    if (!is_running_.load()) {
+                        is_close = true;
                         break;
                     }
-                    catch(const std::exception& e)
-                    {
-                        LOG_ERROR("Retry Connect failed: %s, id=%lu", e.what(), retry_cnt);
-                        std::this_thread::sleep_for(std::chrono::seconds(3));
-                    }
-                    ++retry_cnt;
+                    continue;
                 }
 
-                // 重连超过5次直接退出
-                if (retry_cnt == 5) {
-                    LOG_FATAL("Retry Connect failed %lu times, System exit", retry_cnt);
-                }
+                // 有消息可以读取了
+                std::thread worker(&RpcClient::MessageHandler, this, c);
+                worker.detach();
             }
-            else {
-                    // 3. 发生错误，需要检查 errno
-                if (errno == EAGAIN || errno == EWOULDBLOCK) {
-                    // 3.1 正常情况：非阻塞模式下暂时无数据，等待下次再试。
-                } else if (errno == EINTR) {
-                    // 3.2 正常情况：被信号中断，应该立即重试 read。
-                } else {
-                    // 3.3 异常情况：发生了真正的错误（如 ECONNRESET, EPIPE 等）。
-                    // 应该记录错误日志，并关闭连接，清理资源。
-                    // perror("read error");
-                    close(fd_);
-                    LOG_FATAL("read error");
-                }
+
+            if (is_close) break;
+
+            // 如果事件数量太多了，自动进行扩容
+            if (numEvents == events.size()) {
+                events.resize(2 * numEvents);
             }
         }
     }
 
-    static bool send(std::vector<uint8_t>& bytes) {
+    bool send(std::vector<uint8_t>& bytes) {
         // 发送消息
-        if (::send(fd_, bytes.data(), bytes.size(), 0) == -1) {
+        if (::send(sockfd_, bytes.data(), bytes.size(), 0) == -1) {
             uint64_t id = reinterpret_cast<ProtocolHeader*>(bytes.data())->request_id = request_id_;
             promiseMap_.erase(id);
+            LOG_ERROR("client send msg error %d", sockfd_);
             return false;
         }
         
         return true;
     }
 
-    // static bool send(const std::vector<uint8_t>& bytes) {
-    //     // 模拟发送消息
-    //     auto bytes_recv = RpcServerDemo::RecvMsg(bytes);
 
-    //     ProtocolHeader header;
-    //     std::string res;
-    //     Decoder::Decode(bytes_recv, header, res);
-
-    //     if (header.request_id != 200) {
-    //         return false;
-    //     }
-        
-    //     return true;
-    // }
 public:
     template<class R, typename ...Args>
-    static bool call(const std::string& srvName, const std::tuple<Args...>& args, R& ret) {
+    uint8_t call(const std::string& srvName, const std::tuple<Args...>& args, R& ret) {
 
         std::string body = Serialize::Serialization(args);
         // 需要设置Request_id
@@ -300,10 +369,16 @@ public:
             if (!send(bytes)) return false;
         }
 
+        auto status = f.wait_for(std::chrono::seconds(5));
+        if (status == std::future_status::timeout) {
+            promiseMap_.erase(rid);
+            return TIMEOUT; // 定义超时错误码
+        }
+
         // 阻塞获取结果
         Response r = f.get();
 
-        if (r.state) {
+        if (r.state == SUCCESS) {
             ret = Serialize::Deserialization<R>(r.data);
         }
 
@@ -311,7 +386,7 @@ public:
     }
 
     template<typename ...Args>
-    static bool call(const std::string& srvName, const std::tuple<Args...>& args) {
+    bool call(const std::string& srvName, const std::tuple<Args...>& args) {
         std::string body = Serialize::Serialization(args);
         // 需要设置Request_id
         auto bytes = Encoder::Encode(srvName, body);

@@ -103,9 +103,9 @@ TEST(UNetTest, TestTcpServer) {
     server_worker.detach();
 
     // 启用客户端
-    std::thread cli_loop(&RpcClient::ReadLoop);
+    // std::thread cli_loop(&RpcClient::ReadLoop, &RpcClient::GetInstance());
 
-    cli_loop.detach();
+    // cli_loop.detach();
 
     // 等待服务启动
     std::this_thread::sleep_for(std::chrono::milliseconds(10));
