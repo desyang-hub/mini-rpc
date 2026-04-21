@@ -136,6 +136,12 @@ target_link_libraries(minirpc_main PRIVATE
 #end =============== main ===============
 
 
+#start =============== example ===============
+add_subdirectory(example)
+#end =============== example ===============
+
+
+
 #start=============== test ===============
 # 测试相关设置
 option(BUILD_TESTS "Build tests" OFF)

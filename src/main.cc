@@ -115,9 +115,9 @@ int main(int argc, char const *argv[])
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
     // 启用客户端
-    std::thread cli_loop(&RpcClient::ReadLoop);
+    // std::thread cli_loop(&RpcClient::ReadLoop, &RpcClient::GetInstance());
 
-    cli_loop.detach();
+    // cli_loop.detach();
 
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
 

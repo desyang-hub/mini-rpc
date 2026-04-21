@@ -65,15 +65,20 @@ public:
             pkg_len_ = header_.body_len + header_.srv_name_len + sizeof(header_);
         }
 
-        // 如果包完整了，就读取数据
-        if (buf_.readable_bytes() >= pkg_len_) {
-            return pkg_len_;
-        }
+        return byteNum;
 
-        return 0;
+        // 如果包完整了，就读取数据
+        // if (buf_.readable_bytes() >= pkg_len_) {
+        //     return pkg_len_;
+        // }
+
+        // // 出错了出错了=======================================》》》》》
+        // return 1;
     }
 
     bool decode(std::string& body, std::string& srv_name, ProtocolHeader& header) {
+        if (pkg_len_ == -1 || buf_.readable_bytes() < pkg_len_) return false;
+        
         std::vector<uint8_t> bytes(pkg_len_);
         
         buf_.get_package_data(bytes.data(), pkg_len_);

@@ -23,10 +23,12 @@ class Encoder
 private:
 public:
     static std::vector<uint8_t> Encode(ProtocolHeader& header, const std::string& body, uint8_t type = MSG_RESPONSE) {
+        header.body_len = body.size();
+        header.srv_name_len = 0;
         // 计算checksum
         header.checksum = simple_crc32(reinterpret_cast<const uint8_t*>(body.data()), header.body_len);
 
-        header.srv_name_len = 0;
+               
 
         std::vector<uint8_t> packet(sizeof(header) + header.srv_name_len + header.body_len);
 

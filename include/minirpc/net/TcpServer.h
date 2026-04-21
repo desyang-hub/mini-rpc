@@ -12,7 +12,7 @@
 namespace minirpc
 {
 
-void set_nonblocking(int fd);
+
 
 class TcpServer : public nonecopyable
 {

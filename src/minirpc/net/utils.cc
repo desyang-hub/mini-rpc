@@ -9,6 +9,15 @@
 namespace minirpc
 {
 
+void set_nonblocking(int fd) {
+    int flags = fcntl(fd, F_GETFL, 0);
+    if (flags == -1) {
+        perror("fcntl get error");
+        return;
+    }
+    fcntl(fd, F_SETFL, flags | O_NONBLOCK);
+}  
+
 // 用于发起Tcp连接，返回fd
 int Dial(int port, const std::string& host) {
     // 先建立连接，拿到fd
