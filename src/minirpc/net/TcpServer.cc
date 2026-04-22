@@ -217,8 +217,10 @@ void TcpServer::loop() {
 
                 // 最好使用线程池来进行调度，否则开销巨大
                 // ClienHandler(this, c);
-                std::thread request_woker(&TcpServer::ClienHandler, this, c);
-                request_woker.detach();
+                // std::thread request_woker(&TcpServer::ClienHandler, this, c);
+                // request_woker.detach();
+
+                threadPool_.submit(std::bind(&TcpServer::ClienHandler, this, c));
             }
         }
 

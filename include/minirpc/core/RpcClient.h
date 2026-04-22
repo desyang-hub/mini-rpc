@@ -4,6 +4,7 @@
 #include "minirpc/common/RpcException.h"
 #include "minirpc/common/Buffer.h"
 #include "minirpc/common/Response.h"
+#include "minirpc/common/ThreadPool.h"
 #include "minirpc/protocol/Serialize.h"
 #include "minirpc/protocol/Encoder.h"
 #include "minirpc/protocol/Decoder.h"
@@ -146,6 +147,7 @@ private:
     int wakeup_fd_;   // eventfd 或 pipe 读端
     // 这里最好设计成 {bool , string}
     std::unordered_map<uint64_t, std::promise<Response>> promiseMap_; // <request—id, promise>
+    ThreadPool threadPool_;
 
     std::mutex send_lock_;
     std::atomic_bool is_running_ = true;
@@ -321,8 +323,9 @@ public:
                 }
 
                 // 有消息可以读取了
-                std::thread worker(&RpcClient::MessageHandler, this, c);
-                worker.detach();
+                // std::thread worker(&RpcClient::MessageHandler, this, c);
+                // worker.detach();
+                threadPool_.submit(std::bind(&RpcClient::MessageHandler, this, c));
             }
 
             if (is_close) break;
