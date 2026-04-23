@@ -155,6 +155,14 @@
     Func##N(__VA_ARGS__)
 
 // 5. 最终使用的宏
+/**
+ * @def RPC_SERVICE_BIND(Class, ...)
+ * @brief 在服务类中绑定要暴露的方法
+ * @param Class 服务类名
+ * @param ... 方法名列表，可变参数
+ * 
+ * @note 该宏必须在类定义域内使用
+ */
 #define RPC_SERVICE_BIND(Class, ...)                           \
 private:                                                       \
     Class()                                                    \

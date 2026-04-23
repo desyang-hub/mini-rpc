@@ -121,6 +121,14 @@
     Func##N(Class, __VA_ARGS__)
 
 // 4. 最终用户宏
+/**
+ * @def RPC_SERVICE_STUB(Class, ...)
+ * @brief 生成客户端代理类
+ * @param Class 服务类名
+ * @param ... 方法名列表，必须与 RPC_SERVICE_BIND 中的方法列表一致
+ * 
+ * @note 生成的代理类名为 Class##_Stub
+ */
 #define RPC_SERVICE_STUB(Class, ...) \
     public: /* ✅ 修复点：确保生成的类是 public 的 */ \
     class Class##_Stub { \
@@ -137,6 +145,25 @@ namespace minirpc
 {
 const int MAX_PACKAGE_LEN = 2048;
 
+
+
+/**
+ * @class RpcClient
+ * @brief RPC 客户端核心类，采用单例模式
+ * 
+ * 该类负责：
+ * - 管理与服务器的连接
+ * - 发送 RPC 请求并接收响应
+ * - 处理异步调用和超时
+ * 
+ * 使用示例：
+ * @code
+ * UserService::UserService_Stub stub;
+ * auto result = stub.login("user", "pass");
+ * @endcode
+ * 
+ * @note 该类通过宏 RPC_SERVICE_STUB 自动生成代理类
+ */
 class RpcClient
 {
 
