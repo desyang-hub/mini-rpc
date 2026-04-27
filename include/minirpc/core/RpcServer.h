@@ -27,12 +27,10 @@ namespace minirpc
     class RpcServer
     {
     private:
-        static std::shared_mutex hanelers_mutex_;
-        // static std::unordered_map<std::string, RpcHandler> handlers_;
-        static std::unordered_map<std::string, RpcHandler>& GetHandlers() {
-            static std::unordered_map<std::string, RpcHandler> handlers_;
-            return handlers_;
-        }
+        std::shared_mutex hanelers_mutex_;
+        std::unordered_map<std::string, RpcHandler> handlers_;
+
+        std::vector<std::string> services_;
 
         // 辅助函数：处理返回值为 void 的情况
         template <typename F, typename T>
@@ -51,9 +49,33 @@ namespace minirpc
             res = Serialize::Serialization(f(param));
         }
 
+        static RpcServer& GetInstance() {
+            static RpcServer server;
+            return server;
+        }
     public:
+        static void RegisterService(const std::string& clsNmae) {
+            GetInstance().registerService(clsNmae);
+        }
+
+        void registerService(const std::string& clsNmae);
+
+        static std::vector<std::string>& GetServices() {
+            return GetInstance().getServices();
+        }
+
+        std::vector<std::string>& getServices() {
+            return services_;
+        }
+
         template <class Func>
-        static void bind(const std::string &name, Func &&fun)
+        static void Bind(const std::string &name, Func &&fun)
+        {
+            GetInstance().bind(name, std::forward<Func>(fun));
+        }
+
+        template <class Func>
+        void bind(const std::string &name, Func &&fun)
         {
 
 
@@ -69,8 +91,6 @@ namespace minirpc
 
             // 使用写锁
             std::unique_lock<std::shared_mutex> lock(hanelers_mutex_);
-
-            auto& handlers_ = GetHandlers();
 
             // std::cout << handlers_.size() << std::endl;
 
@@ -88,7 +108,13 @@ namespace minirpc
             LOG_INFO("RpcServer bind %s", name.c_str());
         }
 
-        static bool call(const std::string &name, const std::string &body, std::string &res);
+
+        static bool Call(const std::string &name, const std::string &body, std::string &res) {
+            return GetInstance().call(name, body, res);
+        }
+
+        bool call(const std::string &name, const std::string &body, std::string &res);
+        
     };
 
 } // namespace minirpc

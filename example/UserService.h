@@ -16,8 +16,8 @@ public:
     std::string login(const std::string& name, const std::string& pswd);
 
 
-    std::string resigest(const std::string& name, const std::string& pswd);
+    std::string logon(const std::string& name, const std::string& pswd);
 
-RPC_SERVICE_BIND(UserService, login, resigest);
-RPC_SERVICE_STUB(UserService, login, resigest);
+RPC_SERVICE_BIND(UserService, login, logon);
+RPC_SERVICE_STUB(UserService, login, logon);
 };

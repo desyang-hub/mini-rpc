@@ -9,6 +9,7 @@
 #include <iostream>
 #include <unordered_map>
 #include <functional>
+#include <atomic>
 
 namespace minirpc
 {
@@ -26,14 +27,18 @@ private:
     std::unordered_map<int, Conn*> connMap_;
     ThreadPool threadPool_;
     
+    
 
     int init(int port);
+    void lunch_service_register(int port, const std::string& host="127.0.0.1");
     void loop();
     void removeConn(Conn* c);
+    static void sigHandler(int sig);
 
     static void ClienHandler(TcpServer* server, Conn* c);
 
 public:
+    static std::atomic_bool is_running_;
     using EventCallback = std::function<void()>;
     using ReadEventCallback = std::function<void(const TimeStamp&)>;
 

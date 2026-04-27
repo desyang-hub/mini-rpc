@@ -16,13 +16,14 @@ std::string UserService::login(const std::string& name, const std::string& pswd)
         if (it->second != pswd) {
             throw minirpc::RpcException("user name or password error");
         }
+        std::cout << "login success." << std::endl;
         return name;
     }
     return "";
 }
 
 
-std::string UserService::resigest(const std::string& name, const std::string& pswd) {
+std::string UserService::logon(const std::string& name, const std::string& pswd) {
     auto it = usersMap_.find(name);
 
     if (it != usersMap_.end()) {
@@ -30,6 +31,7 @@ std::string UserService::resigest(const std::string& name, const std::string& ps
     }
     else {
         usersMap_[name] = pswd;
+        std::cout << "register success." << std::endl;
         return name;
     }
 

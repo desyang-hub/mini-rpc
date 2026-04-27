@@ -12,6 +12,8 @@
 #include "minirpc/net/utils.h"
 #include "minirpc/net/Conn.h"
 #include "minirpc/core/macro/rpc_service_stub.h"
+#include "minirpc/core/IConnectionPoolFactory.h"
+#include "minirpc/core/IConnection.h"
 
 
 #include <iostream>
@@ -29,7 +31,7 @@ namespace minirpc
 {
 const int MAX_PACKAGE_LEN = 2048;
 
-
+class IConnection;
 
 /**
  * @class RpcClient
@@ -66,6 +68,11 @@ private:
     std::thread loop_woker_;
 
     std::unordered_map<int, Conn*> connMap_;
+
+    // 连接池
+    IConnectionPoolFactoryPtr connnection_pool_factory_ = nullptr;
+
+
 
     // 私有构造，只允许单例，仅在第一个Stub创建时初始化
     RpcClient();
@@ -130,6 +137,8 @@ private:
 
 public:
     static RpcClient& GetInstance();
+
+    void messageHandler(IConnection* c);
 
     // 此处实现一个Rpc用户端读循环，用于不断从io流读取数据
     void ReadLoop() {
@@ -269,9 +278,14 @@ public:
         // 需要设置Request_id
         auto bytes = Encoder::Encode(srvName, body);
 
+        int id = srvName.find('.');
+        std::string name = srvName.substr(0, id);
+
 
         int rid;
         std::future<Response> f;
+        IConnectionPool* pool = connnection_pool_factory_->getConnectionPool(name);
+        IConnectionPtr conn = pool->getConnection();
         // 发送数据
         {
             std::lock_guard<std::mutex> lock(send_lock_);
@@ -280,9 +294,11 @@ public:
             promiseMap_[rid] = std::promise<Response>();
             f = promiseMap_[rid].get_future();
             ++request_id_;
-            if (!send(bytes)) return false;
+            conn->send(bytes);
+            // if (!send(bytes)) return false;
         }
 
+        // 设置超时返回
         auto status = f.wait_for(std::chrono::seconds(5));
         if (status == std::future_status::timeout) {
             promiseMap_.erase(rid);

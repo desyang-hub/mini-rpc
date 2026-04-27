@@ -75,7 +75,7 @@
         using return_type = typename minirpc::function_traits<MethodType>::return_type;\
         \
         /* ✅ 修改：Lambda 的参数还是 tuple，但内部调用 f 时要解开 */ \
-        minirpc::RpcServer::bind(#Class "." #Method, [instancePtr](const param_tuple &received_tuple) { \
+        minirpc::RpcServer::Bind(#Class "." #Method, [instancePtr](const param_tuple &received_tuple) { \
             if constexpr (std::is_void_v<return_type>) { \
                 /* 如果是 void，解开 tuple 调用 f */ \
                 minirpc::rpc_apply([instancePtr](auto&&... args) { \
@@ -122,6 +122,7 @@
 // 关键修改：增加中间层强制展开 PP_NARG
 
 #define _RPC_BIND_ALL(Class, ...) \
+    minirpc::RpcServer::RegisterService(#Class);   /*这里需要添加逻辑 关于将类名注册到服务*/ \
     _RPC_BIND_DISPATCH(_RPC_BIND_IMPL_, Class, __VA_ARGS__)
 
 // 第一层：接收参数，调用计数器

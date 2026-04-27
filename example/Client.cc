@@ -10,16 +10,24 @@ int main(int argc, char const *argv[])
     }
     catch(const std::exception& e)
     {
-        std::cout << "Exception Info: " << std::endl;
+        std::cerr << "login error: " << e.what() << '\n';
+    }
+
+
+    try
+    {
+        stub.logon("root", "root");
+        std::cout << "register success." << std::endl;
+    }
+    catch(const std::exception& e)
+    {
         std::cerr << e.what() << '\n';
     }
 
     try
     {
-        stub.resigest("root", "root");
-        std::string msg = stub.login("root", "root");
-
-        std::cout << msg << std::endl;
+        std::string user = stub.login("root", "root");
+        std::cout << "user " << user << " login success." << std::endl;
     }
     catch(const std::exception& e)
     {
