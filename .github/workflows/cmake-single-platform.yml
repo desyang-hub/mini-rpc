@@ -16,24 +16,41 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
-    # --- 通过apt安装Google Test ---
-    - name: Install Google Test
+    # ==================== 缓存 _deps 和 build 目录 ====================
+    - name: Cache CMake dependencies and build output
+      uses: actions/cache@v4
+      with:
+        path: |
+          ${{ github.workspace }}/build/_deps
+          ${{ github.workspace }}/build
+        key: ${{ runner.os }}-cmake-${{ hashFiles('CMakeLists.txt', 'src/**/*', 'include/**/*') }}
+        restore-keys: |
+          ${{ runner.os }}-cmake-
+    # ==================================================================
+
+    # --- 安装系统依赖（无法缓存，但很快）---
+    - name: Install system dependencies
       run: |
         sudo apt-get update
         sudo apt-get install -y libgtest-dev libcurl4-openssl-dev
-        # 安装后需要手动编译并安装GTest库
+
+    # 手动编译 GTest（可选：也可缓存 /usr/lib/libgtest*.a，但通常不必要）
+    - name: Build Google Test
+      run: |
         cd /usr/src/gtest
         sudo cmake CMakeLists.txt
         sudo make
         sudo cp lib/*.a /usr/lib
-    # --------------------------------------------------
 
+    # ==================== 配置 CMake ====================
     - name: Configure CMake
-      run: cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} -DBUILD_TESTS=ON
+      run: cmake -B ${{ github.workspace }}/build -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} -DBUILD_TESTS=ON
 
+    # ==================== 构建 ====================
     - name: Build
-      run: cmake --build ${{github.workspace}}/build --config ${{env.BUILD_TYPE}}
+      run: cmake --build ${{ github.workspace }}/build --config ${{ env.BUILD_TYPE }}
 
+    # ==================== 测试 ====================
     - name: Test
-      working-directory: ${{github.workspace}}/build
-      run: ctest -C ${{env.BUILD_TYPE}} --output-on-failure
+      working-directory: ${{ github.workspace }}/build
+      run: ctest -C ${{ env.BUILD_TYPE }} --output-on-failure
