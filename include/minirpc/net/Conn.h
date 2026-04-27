@@ -55,7 +55,8 @@ public:
 
             // 发生了异常
             // perror("read error");
-            LOG_ERROR("read error");
+            
+            LOG_ERROR("read error (%s)", strerror(errno_code));
             return -1;
         }
 

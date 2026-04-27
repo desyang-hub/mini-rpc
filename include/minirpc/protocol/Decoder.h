@@ -63,7 +63,7 @@ public:
     }
 
 
-    static bool Decode(std::vector<uint8_t> raw_data, ProtocolHeader& header, std::string& body) {
+    static bool Decode(const Bytes& raw_data, ProtocolHeader& header, std::string& body) {
         int header_len = sizeof(header);
 
         // 1. 长度不够

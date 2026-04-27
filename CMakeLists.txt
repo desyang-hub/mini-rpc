@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.20)
 
-project(minirpc VERSION 1.4.1)
+project(minirpc VERSION 1.5.0)
 
 # setting luchange standerd
 set(CMAKE_CXX_STANDARD 17) # equal -std=c++14
@@ -25,6 +25,17 @@ add_library(nlohmann_json_interface INTERFACE)
 target_include_directories(nlohmann_json_interface INTERFACE 
     ${nlohmann_json_SOURCE_DIR}/include)
 #end =============== dependencies ===============
+
+
+# nacos-cpp
+FetchContent_Declare(
+    nacos_cpp
+    GIT_REPOSITORY https://github.com/nacos-group/nacos-sdk-cpp.git
+    GIT_TAG        v1.1.1  # 推荐使用较新稳定版，支持 CMake
+)
+FetchContent_MakeAvailable(nacos_cpp)
+
+
 
 # 编译链接库
 #start=============== common ===============
@@ -53,6 +64,9 @@ target_include_directories(common PUBLIC
 add_library(core STATIC 
     src/minirpc/core/RpcServer.cc
     src/minirpc/core/RpcClient.cc
+    src/minirpc/core/RpcConnection.cc
+    src/minirpc/core/RpcConnectionPool.cc
+    src/minirpc/core/TcpConnectionPoolFactory.cc
 )
 # 创建动态库
 # add_library(protocol SHARED 
@@ -81,6 +95,7 @@ add_library(net STATIC
     src/minirpc/net/EpollPoller.cc
     src/minirpc/net/TcpServer.cc
     src/minirpc/net/utils.cc
+    src/minirpc/net/TcpClient.cc
 )
 # 创建动态库
 # add_library(protocol SHARED 
@@ -91,10 +106,21 @@ add_library(net STATIC
 target_include_directories(net PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>  # 安装后头文件会放到 include 目录
+    # /usr/local/include/nacos # libnacos_cli.so
+    ${nacos_cpp_SOURCE_DIR}/include
 )
+
+# target_link_directories(net PRIVATE
+#     ${CMAKE_CURRENT_SOURCE_DIR}/lib
+# )
+
+
 target_link_libraries(net PRIVATE 
     protocol
     common
+    nacos-cli-static # 静态链接库
+    curl
+    z
 )
 #end =============== net ===============
 

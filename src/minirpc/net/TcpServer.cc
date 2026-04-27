@@ -9,9 +9,56 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <vector>
+#include <thread>
+#include <signal.h>
+
+#include "Nacos.h"
 
 namespace minirpc
 {
+    using namespace nacos;
+
+    void register_services(const std::vector<std::string>& services, int server_port, const std::string& host) {
+        // 注册信号处理器
+        // signal(SIGINT, signalHandler);   // Ctrl+C
+        // signal(SIGTERM, signalHandler);  // kill 命令
+    
+        Properties configProps;
+        configProps[PropertyKeyConst::SERVER_ADDR] = host;
+        INacosServiceFactory *factory = NacosFactoryFactory::getNacosFactory(configProps);
+        ResourceGuard<INacosServiceFactory> _guardFactory(factory);
+        
+        auto g_namingSvc = factory->CreateNamingService();
+        ResourceGuard<NamingService> _serviceGuard(g_namingSvc);
+    
+        Instance instance;
+        instance.clusterName = "DefaultCluster";
+        instance.ip = host;
+        instance.port = server_port;
+        instance.instanceId = "1";
+        instance.ephemeral = true;
+    
+        // 注册服务
+        try {
+            for (const std::string& serviceName : services) {
+                // std::cout << "name: " << serviceName << std::endl;
+                g_namingSvc->registerInstance(serviceName, instance);
+            }
+        } catch (NacosException &e) {
+            // std::cerr << "❌ 注册失败: " << e.what() << std::endl;
+            exit(-1);
+        }
+    
+        // std::cout << "🚀 服务已启动，等待信号退出 (Ctrl+C)..." << std::endl;
+    
+        // 主循环：等待退出信号
+        while (TcpServer::is_running_.load()) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(500));
+        }
+    }
+
+
+    std::atomic_bool TcpServer::is_running_ = true;
 
     TcpServer::TcpServer() {
 
@@ -19,6 +66,10 @@ namespace minirpc
 
     TcpServer::~TcpServer() {
 
+    }
+
+    void TcpServer::sigHandler(int sig) {
+        is_running_.store(false);
     }
 
 // 初始化, 创建sockfd
@@ -61,6 +112,21 @@ int TcpServer::init(int port) {
 
     return sockfd_;
 }
+
+
+/**
+ * @brief 启用服务注册子线程
+ */
+void TcpServer::lunch_service_register(int port, const std::string& host) {
+
+    auto& services = RpcServer::GetServices();
+    // LOG_INFO("name: %s:", services[0].c_str());
+    // std::cout << services.size() << std::endl;
+    
+    std::thread worker(register_services, RpcServer::GetServices(), port, host);
+    worker.detach();
+}
+
 
 // 移除该连接
 void TcpServer::removeConn(Conn* c) {
@@ -112,7 +178,7 @@ void TcpServer::ClienHandler(TcpServer* server, Conn* c) {
             bool is_success = c->decode(body, srv_name, header);
             if (is_success) {
                 std::string res;
-                is_success = RpcServer::call(srv_name, body, res);
+                is_success = RpcServer::Call(srv_name, body, res);
 
                 if (!is_success) {
                     header.code = FAILED;
@@ -133,6 +199,8 @@ void TcpServer::ClienHandler(TcpServer* server, Conn* c) {
 
 
 void TcpServer::loop() {
+    signal(SIGINT,  &TcpServer::sigHandler);   // Ctrl+C
+    signal(SIGTERM, &TcpServer::sigHandler);  // kill 命令
 
     // 1. 创建epoll
     epollfd_ = epoll_create1(EPOLL_CLOEXEC);
@@ -164,7 +232,7 @@ void TcpServer::loop() {
     std::vector<epoll_event> events(1024);
     
 
-    while (true) {
+    while (is_running_.load()) {
         // 阻塞等待，返回触发的事件个数
         int numEvents = epoll_wait(epollfd_, events.data(), events.size(), -1); // -1 表示无限等待
 
@@ -236,6 +304,10 @@ void TcpServer::loop() {
 void TcpServer::serve(int port) {
     // 创建socket
     int sockfd = init(port);
+
+    std::string host = "127.0.0.1";
+
+    lunch_service_register(port, host);
 
     // 创建epoll
     loop();
