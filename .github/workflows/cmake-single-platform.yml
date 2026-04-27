@@ -17,15 +17,11 @@ jobs:
     - uses: actions/checkout@v4
 
     # ==================== 缓存 _deps 和 build 目录 ====================
-    - name: Cache CMake dependencies and build output
+    - name: Cache CMake dependencies (_deps only)
       uses: actions/cache@v4
       with:
-        path: |
-          ${{ github.workspace }}/build/_deps
-          ${{ github.workspace }}/build
-        key: ${{ runner.os }}-cmake-${{ hashFiles('CMakeLists.txt', 'src/**/*', 'include/**/*') }}
-        restore-keys: |
-          ${{ runner.os }}-cmake-
+        path: ${{ github.workspace }}/build/_deps
+        key: ${{ runner.os }}-deps-${{ hashFiles('CMakeLists.txt') }}
     # ==================================================================
 
     # --- 安装系统依赖（无法缓存，但很快）---
