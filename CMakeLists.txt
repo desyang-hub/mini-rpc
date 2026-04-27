@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.20)
 
-project(minirpc VERSION 1.4.1)
+project(minirpc VERSION 1.5.0)
 
 # setting luchange standerd
 set(CMAKE_CXX_STANDARD 17) # equal -std=c++14
