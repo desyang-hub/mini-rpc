@@ -2,6 +2,7 @@
 
 #include "minirpc/common/nonecopyable.h"
 #include "minirpc/common/timeStamp.h"
+#include "minirpc/common/ThreadPool.h"
 #include "minirpc/net/Conn.h"
 
 
@@ -23,6 +24,7 @@ private:
     int sockfd_;
     int epollfd_;
     std::unordered_map<int, Conn*> connMap_;
+    ThreadPool threadPool_;
     
 
     int init(int port);
