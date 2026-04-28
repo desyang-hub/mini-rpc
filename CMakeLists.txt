@@ -66,6 +66,7 @@ add_library(core STATIC
     src/minirpc/core/RpcConnection.cc
     src/minirpc/core/RpcConnectionPool.cc
     src/minirpc/core/TcpConnectionPoolFactory.cc
+    src/minirpc/core/utils.cc
 )
 # 创建动态库
 # add_library(protocol SHARED 

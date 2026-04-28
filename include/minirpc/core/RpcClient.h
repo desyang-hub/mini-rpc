@@ -29,7 +29,10 @@
 
 namespace minirpc
 {
-const int MAX_PACKAGE_LEN = 2048;
+
+namespace {
+    const int MAX_PACKAGE_LEN = 2048;
+}
 
 class IConnection;
 
@@ -322,9 +325,13 @@ public:
         // 需要设置Request_id
         auto bytes = Encoder::Encode(srvName, body);
 
+        int id = srvName.find('.');
+        std::string name = srvName.substr(0, id);
 
         int rid;
         std::future<Response> f;
+        IConnectionPool* pool = connnection_pool_factory_->getConnectionPool(name);
+        IConnectionPtr conn = pool->getConnection();
         // 发送数据
         {
             std::lock_guard<std::mutex> lock(send_lock_);
@@ -333,7 +340,8 @@ public:
             promiseMap_[rid] = std::promise<Response>();
             f = promiseMap_[rid].get_future();
             ++request_id_;
-            if (!send(bytes)) return false;
+            conn->send(bytes);
+            // if (!send(bytes)) return false;
         }
 
         // 阻塞获取结果
@@ -344,7 +352,7 @@ public:
     template<class T, typename ...Args> 
     std::future<T> async_call(const std::string& srvName, const std::tuple<Args...>& args) {
         // set{bool, promise}
-        std::future<T> f = std::async([&srvName, &args](){
+        std::future<T> f = std::async(std::launch::async, [&srvName, &args](){
             // 判断类型是不是空
             bool is_success;
             if constexpr (std::is_void_v<T>) {

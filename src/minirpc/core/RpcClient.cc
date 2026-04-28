@@ -9,6 +9,7 @@
 
 namespace minirpc
 {
+    
 RpcClient::RpcClient() 
     : sockfd_(-1), 
     request_id_(0), 
