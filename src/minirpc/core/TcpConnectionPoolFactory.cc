@@ -6,6 +6,7 @@
 namespace minirpc
 {
 
+// 创建连接池工厂实例
 IConnectionPoolFactory* IConnectionPoolFactory::CreateConnectionPoolFactory() {
     return new TcpConnectionPoolFactory();
 }
