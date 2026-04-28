@@ -44,7 +44,6 @@ add_library(common STATIC
     src/minirpc/common/logger.cc
     src/minirpc/common/timeStamp.cc
     src/minirpc/common/utils.cc
-    src/minirpc/common/ThreadPool.cc
 )
 # 创建动态库
 # add_library(protocol SHARED 

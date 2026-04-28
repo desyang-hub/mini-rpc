@@ -287,8 +287,9 @@ void TcpServer::loop() {
                 // ClienHandler(this, c);
                 // std::thread request_woker(&TcpServer::ClienHandler, this, c);
                 // request_woker.detach();
-
-                threadPool_.submit(std::bind(&TcpServer::ClienHandler, this, c));
+                
+                threadPool_.enqueue(&TcpServer::ClienHandler, this, c);
+                // threadPool_.submit(std::bind(&TcpServer::ClienHandler, this, c));
             }
         }
 

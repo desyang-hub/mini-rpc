@@ -245,7 +245,8 @@ public:
                 // 有消息可以读取了
                 // std::thread worker(&RpcClient::MessageHandler, this, c);
                 // worker.detach();
-                threadPool_.submit(std::bind(&RpcClient::MessageHandler, this, c));
+                threadPool_.enqueue(std::bind(&RpcClient::MessageHandler, this, c));
+                // threadPool_.submit(std::bind(&RpcClient::MessageHandler, this, c));
             }
 
             if (is_close) break;

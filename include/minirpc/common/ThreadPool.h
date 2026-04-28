@@ -1,71 +1,125 @@
 #pragma once
 
 #include <vector>
+#include <thread>
 #include <queue>
 #include <mutex>
-#include <condition_variable>
-#include <utility>
-#include <unistd.h>
-#include <thread>
-#include <functional>
+#include <future>
+#include <memory>
 #include <iostream>
+#include <utility>
+#include <stdexcept>
+#include <functional>
+#include <condition_variable>
 
 namespace minirpc
 {
 
-const int THREAD_POOL_DEFAULT_SIZE = 4;
-const int THREAD_CONTAINER_INIT_SIZE = 64;
 
+    
+namespace
+{
+    const size_t DEFAULT_THREAD_POOL_SIZE = 4;
+    using TaskHandler = std::function<void()>;   
+} // namespace
 
-/**
- * 线程池类，用于管理一组线程来执行任务
- */
-/**
- * @brief 线程池类，用于管理和复用线程执行任务
- */
 class ThreadPool
 {
 private:
-    using Job = std::function<void()>;
-
-    std::vector<std::thread> workers_;    // 存储工作线程的容器
-    std::queue<Job> jobs_;                // 存储待执行任务的队列
-    std::mutex mutex_;                  // 用于保护任务队列的互斥锁，防止多线程同时访问
-    std::condition_variable condition_;  // 用于线程间同步的条件变量，用于线程的等待和唤醒
-    bool stop_;                           // 标记线程池是否停止，用于控制线程池的生命周期
+    std::queue<TaskHandler> queue_;
+    std::vector<std::thread> workers_;
+    std::mutex mutex_;
+    bool is_running_;
+    std::condition_variable condition_;
 
 public:
-    /**
-     * @brief 构造函数，初始化线程池
-     * @param pool_size 线程池中线程的数量，默认值为 THREAD_POOL_DEFAULT_SIZE
-     */
-    ThreadPool(int pool_size = THREAD_POOL_DEFAULT_SIZE, int thread_container_init_size = THREAD_CONTAINER_INIT_SIZE);
+    inline ThreadPool(const int pool_size = DEFAULT_THREAD_POOL_SIZE);
+    inline ~ThreadPool();
 
-    /**
-     * @brief 析构函数，清理线程池资源
-     */
-    ~ThreadPool();
-
-public:
-    /**
-     * @brief 提交任务到线程池
-     * @param job 要提交的任务函数，支持任意可调用对象
-     * @note 使用右值引用实现完美转发，避免不必要的拷贝
-     */
-    template<class FUNC>
-    inline void submit(FUNC &&job);
+    template<class F, class ...Args>
+    inline auto enqueue(F&& f, Args&& ...args) -> std::future<typename std::result_of<F(Args...)>::type>;
 };
 
-// 提交任务，注意job是一个无参函数
-template<class FUNC>
-void ThreadPool::submit(FUNC &&job) {
+ThreadPool::ThreadPool(const int pool_size) : is_running_(true)
+{
+    workers_.reserve(pool_size);
+    // 启用多个线程，用于执行提交的任务
+    for (int i = 0; i < pool_size; ++i) {
+        // 创建线程，放入队列中
+        workers_.emplace_back([this]{
+            
+            while (true) {
+                TaskHandler task{};
+                {
+                    // 阻塞从队列中取出任务
+                    std::unique_lock<std::mutex> lock(mutex_);
+                    
+                    condition_.wait(lock, [this]{
+                        return !queue_.empty() || !is_running_;
+                    });
+
+                    if (!queue_.empty()) {
+                        task = std::move(queue_.front());
+                        queue_.pop();
+                    }
+                    else {
+                        // 即将退出
+                        break;
+                    }
+                }
+                
+                // 执行任务，可是我们要返回的是一个future, 通过promise来获取
+                // 无需异常捕获，package_task已经将任务封装，会自动进行异常捕获，并在future.get时，自动抛出
+                task();
+            }
+
+        });
+    }
+}
+
+ThreadPool::~ThreadPool()
+{
+    {
+        std::unique_lock<std::mutex> lock(mutex_);
+        is_running_ = false;
+    }
+    // 所有线程进入销毁
+    condition_.notify_all();
+
+    for (std::thread& woker : workers_) {
+        if (woker.joinable())
+            woker.join();
+    }
+}
+
+template<class F, class ...Args>
+auto ThreadPool::enqueue(F&& f, Args&& ...args) -> std::future<typename std::result_of<F(Args...)>::type> {
+    using return_type = typename std::result_of<F(Args...)>::type;
+
+    // 创建一个异步任务
+    auto task = std::make_shared<std::packaged_task<return_type()>>(
+        std::bind(std::forward<F>(f), std::forward<Args>(args)...)
+    );
+
+    std::future<return_type> res = task->get_future();
+
+    // 加锁添加任务
     {
         std::lock_guard<std::mutex> lock(mutex_);
-        jobs_.emplace(std::forward<FUNC>(job));
+
+        if (!is_running_) {
+            throw std::runtime_error("enqueue on stoped ThreadPool");
+        }
+
+        queue_.emplace([task]{
+            (*task)(); // 执行
+        });
     }
 
-    // 唤醒一个线程,这个动作无需锁
+    // 唤醒线程来取得任务
     condition_.notify_one();
+
+    return res;
 }
 
 
