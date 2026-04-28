@@ -55,7 +55,7 @@ int main(int argc, char const *argv[])
     // cli_loop.detach();
 
     // 等待服务启动
-    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+    std::this_thread::sleep_for(std::chrono::milliseconds(500));
 
     TestService::TestService_Stub stub;
 

@@ -10,10 +10,12 @@ namespace minirpc
 
     bool RpcServer::call(const std::string &name, const std::string &body, std::string &res)
     {
-        // 使用读锁
-        std::shared_lock<std::shared_mutex> lock(hanelers_mutex_);
-
-        auto it = handlers_.find(name);
+        std::unordered_map<std::string, RpcHandler>::iterator it{};
+        {
+            // 使用读锁
+            std::shared_lock<std::shared_mutex> lock(hanelers_mutex_);
+            it = handlers_.find(name);
+        }
 
         if (it == handlers_.end())
         {

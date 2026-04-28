@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.20)
 
-project(minirpc VERSION 1.5.0)
+project(minirpc VERSION 1.5.1)
 
 # setting luchange standerd
 set(CMAKE_CXX_STANDARD 17) # equal -std=c++14
@@ -44,7 +44,6 @@ add_library(common STATIC
     src/minirpc/common/logger.cc
     src/minirpc/common/timeStamp.cc
     src/minirpc/common/utils.cc
-    src/minirpc/common/ThreadPool.cc
 )
 # 创建动态库
 # add_library(protocol SHARED 
@@ -67,6 +66,7 @@ add_library(core STATIC
     src/minirpc/core/RpcConnection.cc
     src/minirpc/core/RpcConnectionPool.cc
     src/minirpc/core/TcpConnectionPoolFactory.cc
+    src/minirpc/core/utils.cc
 )
 # 创建动态库
 # add_library(protocol SHARED 

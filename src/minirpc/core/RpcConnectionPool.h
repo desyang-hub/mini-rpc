@@ -44,7 +44,7 @@ private:
     void onMessage(IConnection* conn);
 
 public:
-    RpcConnectionPool(const std::string& server_name, const std::string& group_name = "DEFAULT_GROUP");
+    explicit RpcConnectionPool(const std::string& server_name, const std::string& group_name = "DEFAULT_GROUP");
     ~RpcConnectionPool() = default;
 
     // 借连接：若池空且未达上限 → 新建；否则等待（初期可返回 nullptr）

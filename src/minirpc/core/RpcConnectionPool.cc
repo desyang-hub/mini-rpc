@@ -91,7 +91,7 @@ void RpcConnectionPool::loop() {
             // std::thread request_woker(&TcpServer::ClienHandler, this, c);
             // request_woker.detach();
 
-            threadPool_.submit(std::bind(&RpcClient::messageHandler, &RpcClient::GetInstance(), c));
+            threadPool_.enqueue(&RpcClient::messageHandler, &RpcClient::GetInstance(), c);
         }
 
         // 如果事件数量太多了，自动进行扩容

@@ -17,7 +17,7 @@ namespace minirpc {
 namespace {
 
 // 安全地获取错误信息
-static std::string get_error_message(int err) {
+std::string get_error_message(int err) {
     char buf[256];
     // POSIX 版 strerror_r：返回 int，成功为 0
     if (strerror_r(err, buf, sizeof(buf)) == 0) {
@@ -27,19 +27,19 @@ static std::string get_error_message(int err) {
     }
 }
 
-static void checkError(const std::string& msg, int result) {
+void checkError(const std::string& msg, int result) {
     if (result < 0) {
         throw std::runtime_error(msg + ": " + std::strerror(errno));
     }
 }
 
-static void checkWouldBlock(const std::string& msg, int result) {
+void checkWouldBlock(const std::string& msg, int result) {
     if (result < 0 && errno != EINPROGRESS) {
         throw std::runtime_error(msg);
     }
 }
 
-static void waitForReady(int sock, bool forRead, int timeoutMs) {
+void waitForReady(int sock, bool forRead, int timeoutMs) {
     fd_set set;
     FD_ZERO(&set);
     FD_SET(sock, &set);
@@ -76,13 +76,6 @@ RpcConnection::RpcConnection(const std::string& host, uint16_t port)
       }
 
 RpcConnection::~RpcConnection() {
-    // 如果有池，那么归还给池
-    // if (master_pool_) {
-    //     master_pool_->returnConnection(std::unique_ptr<IConnection>(this));
-    //     master_pool_ = nullptr;
-    //     return;
-    // }
-
     close();
 }
 
@@ -178,7 +171,7 @@ int RpcConnection::readMsg() {
 
         // 发生了异常
         // perror("read error");
-        LOG_ERROR("read error core");
+        LOG_ERROR("read error %s", strerror(errno_code));
         return -1;
     }
 
