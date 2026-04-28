@@ -178,7 +178,7 @@ int RpcConnection::readMsg() {
 
         // 发生了异常
         // perror("read error");
-        LOG_ERROR("read error core");
+        LOG_ERROR("read error %s", strerror(errno_code));
         return -1;
     }
 

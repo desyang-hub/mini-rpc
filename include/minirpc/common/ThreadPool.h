@@ -33,11 +33,15 @@ private:
     std::condition_variable condition_;
 
 public:
-    inline ThreadPool(const int pool_size = DEFAULT_THREAD_POOL_SIZE);
+    inline explicit ThreadPool(const int pool_size = DEFAULT_THREAD_POOL_SIZE);
     inline ~ThreadPool();
 
     template<class F, class ...Args>
     inline auto enqueue(F&& f, Args&& ...args) -> std::future<typename std::result_of<F(Args...)>::type>;
+
+    // 禁用拷贝
+    ThreadPool(const ThreadPool&) = delete;
+    ThreadPool& operator=(const ThreadPool&) = delete;
 };
 
 ThreadPool::ThreadPool(const int pool_size) : is_running_(true)
