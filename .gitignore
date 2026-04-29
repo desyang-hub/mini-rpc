@@ -8,3 +8,5 @@ build-release/
 
 bin/
 lib/
+
+node_modules/

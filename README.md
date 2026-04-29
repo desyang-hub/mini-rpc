@@ -9,7 +9,7 @@
 [![Build Status](https://github.com/desyang-hub/mini-rpc/actions/workflows/cmake-single-platform.yml/badge.svg)](https://github.com/desyang-hub/mini-rpc/actions)
 [![Build Status](https://github.com/desyang-hub/mini-rpc/actions/workflows/release.yml/badge.svg)](https://github.com/desyang-hub/mini-rpc/actions)
 
-**[📖 中文文档](https://desyang-hub.github.io/mini-rpc/zh/)** | **[📖 English Docs](https://desyang-hub.github.io/mini-rpc/en/)**
+**[📖 中文文档](https://desyang-hub.github.io/mini-rpc/zh/)** | **[📖 English Docs](https://desyang-hub.github.io/mini-rpc/en/)** | **[📄 API 文档](https://desyang-hub.github.io/mini-rpc/zh/api/reference.html)**
 
 Mini-Rpc is a lightweight C++ RPC framework with simple APIs, high-performance async communication, and Nacos service registry integration.
 
@@ -71,12 +71,12 @@ std::string result = stub.login("root", "password");
 
 ## Documentation
 
-- [Getting Started](https://desyang-hub.github.io/mini-rpc/zh/guide/getting-started)
-- [Architecture](https://desyang-hub.github.io/mini-rpc/zh/guide/architecture)
-- [Usage Guide](https://desyang-hub.github.io/mini-rpc/zh/guide/usage)
-- [Protocol](https://desyang-hub.github.io/mini-rpc/zh/guide/protocol)
-- [API Reference](https://desyang-hub.github.io/mini-rpc/zh/api/reference)
-- [Nacos Integration](https://desyang-hub.github.io/mini-rpc/zh/deploy/nacos)
+- [Getting Started](https://desyang-hub.github.io/mini-rpc/zh/guide/getting-started.html)
+- [Architecture](https://desyang-hub.github.io/mini-rpc/zh/guide/architecture.html)
+- [Usage Guide](https://desyang-hub.github.io/mini-rpc/zh/guide/usage.html)
+- [Protocol](https://desyang-hub.github.io/mini-rpc/zh/guide/protocol.html)
+- [API Reference](https://desyang-hub.github.io/mini-rpc/zh/api/reference.html)
+- [Nacos Integration](https://desyang-hub.github.io/mini-rpc/zh/deploy/nacos.html)
 
 ## License
 

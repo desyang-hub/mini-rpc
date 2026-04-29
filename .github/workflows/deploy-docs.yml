@@ -29,18 +29,15 @@ jobs:
         with:
           node-version: 20
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 9
-
       - name: Install Dependencies
         working-directory: docs
-        run: pnpm install
+        run: npm install
 
       - name: Build
         working-directory: docs
-        run: pnpm build
+        run: npm run build
+        env:
+          DOCS_BASE: /mini-rpc/
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3

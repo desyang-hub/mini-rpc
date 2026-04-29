@@ -1,12 +1,85 @@
 import { defineConfig, defaultTheme } from 'vitepress'
-import { mermaidPlugin } from 'vitepress-plugin-mermaid'
+
+const base = process.env.DOCS_BASE || '/'
+
+const zhSidebar = [
+  {
+    text: '指南',
+    collapsed: false,
+    items: [
+      { text: '快速开始', link: '/zh/guide/getting-started.html' },
+      { text: '架构概览', link: '/zh/guide/architecture.html' },
+      { text: '使用指南', link: '/zh/guide/usage.html' },
+      { text: '协议规范', link: '/zh/guide/protocol.html' },
+    ],
+  },
+  {
+    text: 'API 参考',
+    collapsed: false,
+    items: [
+      { text: 'API 参考', link: '/zh/api/reference.html' },
+    ],
+  },
+  {
+    text: '部署',
+    collapsed: false,
+    items: [
+      { text: 'Nacos 集成', link: '/zh/deploy/nacos.html' },
+    ],
+  },
+  {
+    text: '其他',
+    collapsed: false,
+    items: [
+      { text: '更新日志', link: '/zh/about/changelog.html' },
+      { text: '常见问题', link: '/zh/about/faq.html' },
+    ],
+  },
+]
+
+const enSidebar = [
+  {
+    text: 'Guide',
+    collapsed: false,
+    items: [
+      { text: 'Getting Started', link: '/en/guide/getting-started.html' },
+      { text: 'Architecture', link: '/en/guide/architecture.html' },
+      { text: 'Usage', link: '/en/guide/usage.html' },
+      { text: 'Protocol', link: '/en/guide/protocol.html' },
+    ],
+  },
+  {
+    text: 'API Reference',
+    collapsed: false,
+    items: [
+      { text: 'API Reference', link: '/en/api/reference.html' },
+    ],
+  },
+  {
+    text: 'Deploy',
+    collapsed: false,
+    items: [
+      { text: 'Nacos Integration', link: '/en/deploy/nacos.html' },
+    ],
+  },
+  {
+    text: 'About',
+    collapsed: false,
+    items: [
+      { text: 'Changelog', link: '/en/about/changelog.html' },
+      { text: 'FAQ', link: '/en/about/faq.html' },
+    ],
+  },
+]
 
 export default defineConfig({
+  srcDir: '.',
+  base,
   lang: 'zh-CN',
   title: 'Mini-RPC',
   description: '轻量级 C++ RPC 框架',
   head: [
-    ['link', { rel: 'icon', href: '/favicon.svg', type: 'image/svg+xml' }],
+    ['link', { rel: 'icon', href: base + 'logo.svg', type: 'image/svg+xml' }],
     ['meta', { name: 'theme-color', content: '#5f67ee' }],
     ['meta', { property: 'og:type', content: 'website' }],
     ['meta', { property: 'og:locale', content: 'zh-CN' }],
@@ -14,7 +87,7 @@ export default defineConfig({
     ['meta', { property: 'og:description', content: '轻量级 C++ RPC 框架' }],
   ],
   themeConfig: {
-    logo: { src: '/logo.svg', width: 24, height: 24 },
+    logo: { src: base + 'logo.svg', width: 24, height: 24 },
     outline: { level: [2, 3] },
     socialLinks: [
       { icon: 'github', link: 'https://github.com/desyang-hub/mini-rpc' },
@@ -29,135 +102,23 @@ export default defineConfig({
         detailedView: true,
       },
     },
-
-    // ========== Chinese Locale ==========
-    sidebar: {
-      '/zh/': [
-        {
-          text: '指南',
-          collapsed: false,
-          items: [
-            { text: '快速开始', link: '/zh/guide/getting-started' },
-            { text: '架构概览', link: '/zh/guide/architecture' },
-            { text: '使用指南', link: '/zh/guide/usage' },
-            { text: '协议规范', link: '/zh/guide/protocol' },
-          ],
-        },
-        {
-          text: 'API 参考',
-          collapsed: false,
-          items: [
-            { text: 'API 参考', link: '/zh/api/reference' },
-          ],
-        },
-        {
-          text: '部署',
-          collapsed: false,
-          items: [
-            { text: 'Nacos 集成', link: '/zh/deploy/nacos' },
-          ],
-        },
-        {
-          text: '其他',
-          collapsed: false,
-          items: [
-            { text: '更新日志', link: '/zh/about/changelog' },
-            { text: '常见问题', link: '/zh/about/faq' },
-          ],
-        },
-      ],
-      '/en/': [
-        {
-          text: 'Guide',
-          collapsed: false,
-          items: [
-            { text: 'Getting Started', link: '/en/guide/getting-started' },
-            { text: 'Architecture', link: '/en/guide/architecture' },
-            { text: 'Usage', link: '/en/guide/usage' },
-            { text: 'Protocol', link: '/en/guide/protocol' },
-          ],
-        },
-        {
-          text: 'API Reference',
-          collapsed: false,
-          items: [
-            { text: 'API Reference', link: '/en/api/reference' },
-          ],
-        },
-        {
-          text: 'Deploy',
-          collapsed: false,
-          items: [
-            { text: 'Nacos Integration', link: '/en/deploy/nacos' },
-          ],
-        },
-        {
-          text: 'About',
-          collapsed: false,
-          items: [
-            { text: 'Changelog', link: '/en/about/changelog' },
-            { text: 'FAQ', link: '/en/about/faq' },
-          ],
-        },
-      ],
-    },
-
-    nav: [
-      { text: '指南', link: '/zh/guide/getting-started', activeMatch: '/zh/guide/' },
-      { text: 'API', link: '/zh/api/reference', activeMatch: '/zh/api/' },
-      { text: '部署', link: '/zh/deploy/nacos', activeMatch: '/zh/deploy/' },
-      { text: '关于', link: '/zh/about/changelog', activeMatch: '/zh/about/' },
-    ],
   },
 
   locales: {
     root: {
       label: '简体中文',
       lang: 'zh-CN',
-      link: '/zh/',
+      link: base + 'zh/',
       themeConfig: {
         nav: [
-          { text: '指南', link: '/zh/guide/getting-started', activeMatch: '/zh/guide/' },
-          { text: 'API', link: '/zh/api/reference', activeMatch: '/zh/api/' },
-          { text: '部署', link: '/zh/deploy/nacos', activeMatch: '/zh/deploy/' },
-          { text: '关于', link: '/zh/about/changelog', activeMatch: '/zh/about/' },
+          { text: '指南', link: '/zh/guide/getting-started.html', activeMatch: base + 'zh/guide/' },
+          { text: 'API', link: '/zh/api/reference.html', activeMatch: base + 'zh/api/' },
+          { text: '部署', link: '/zh/deploy/nacos.html', activeMatch: base + 'zh/deploy/' },
+          { text: '关于', link: '/zh/about/changelog.html', activeMatch: base + 'zh/about/' },
         ],
         selectLanguageName: '简体中文',
         sidebar: {
-          '/zh/': [
-            {
-              text: '指南',
-              collapsed: false,
-              items: [
-                { text: '快速开始', link: '/zh/guide/getting-started' },
-                { text: '架构概览', link: '/zh/guide/architecture' },
-                { text: '使用指南', link: '/zh/guide/usage' },
-                { text: '协议规范', link: '/zh/guide/protocol' },
-              ],
-            },
-            {
-              text: 'API 参考',
-              collapsed: false,
-              items: [
-                { text: 'API 参考', link: '/zh/api/reference' },
-              ],
-            },
-            {
-              text: '部署',
-              collapsed: false,
-              items: [
-                { text: 'Nacos 集成', link: '/zh/deploy/nacos' },
-              ],
-            },
-            {
-              text: '其他',
-              collapsed: false,
-              items: [
-                { text: '更新日志', link: '/zh/about/changelog' },
-                { text: '常见问题', link: '/zh/about/faq' },
-              ],
-            },
-          ],
+          [base + 'zh/']: zhSidebar,
         },
         docFooter: { prev: '上一页', next: '下一页' },
         outline: { label: '页面导航' },
@@ -172,50 +133,17 @@ export default defineConfig({
     en: {
       label: 'English',
       lang: 'en-US',
-      link: '/en/',
+      link: base + 'en/',
       themeConfig: {
         nav: [
-          { text: 'Guide', link: '/en/guide/getting-started', activeMatch: '/en/guide/' },
-          { text: 'API', link: '/en/api/reference', activeMatch: '/en/api/' },
-          { text: 'Deploy', link: '/en/deploy/nacos', activeMatch: '/en/deploy/' },
-          { text: 'About', link: '/en/about/changelog', activeMatch: '/en/about/' },
+          { text: 'Guide', link: '/en/guide/getting-started.html', activeMatch: base + 'en/guide/' },
+          { text: 'API', link: '/en/api/reference.html', activeMatch: base + 'en/api/' },
+          { text: 'Deploy', link: '/en/deploy/nacos.html', activeMatch: base + 'en/deploy/' },
+          { text: 'About', link: '/en/about/changelog.html', activeMatch: base + 'en/about/' },
         ],
         selectLanguageName: 'English',
         sidebar: {
-          '/en/': [
-            {
-              text: 'Guide',
-              collapsed: false,
-              items: [
-                { text: 'Getting Started', link: '/en/guide/getting-started' },
-                { text: 'Architecture', link: '/en/guide/architecture' },
-                { text: 'Usage', link: '/en/guide/usage' },
-                { text: 'Protocol', link: '/en/guide/protocol' },
-              ],
-            },
-            {
-              text: 'API Reference',
-              collapsed: false,
-              items: [
-                { text: 'API Reference', link: '/en/api/reference' },
-              ],
-            },
-            {
-              text: 'Deploy',
-              collapsed: false,
-              items: [
-                { text: 'Nacos Integration', link: '/en/deploy/nacos' },
-              ],
-            },
-            {
-              text: 'About',
-              collapsed: false,
-              items: [
-                { text: 'Changelog', link: '/en/about/changelog' },
-                { text: 'FAQ', link: '/en/about/faq' },
-              ],
-            },
-          ],
+          [base + 'en/']: enSidebar,
         },
         docFooter: { prev: 'Previous', next: 'Next' },
         outline: { label: 'On this page' },

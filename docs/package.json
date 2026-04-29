@@ -4,11 +4,14 @@
   "type": "module",
   "scripts": {
     "dev": "vitepress dev",
-    "build": "vitepress build",
+    "build": "vitepress build && node scripts/create-root-redirect.mjs",
     "preview": "vitepress preview"
   },
   "dependencies": {
-    "vitepress": "^1.6.3",
-    "@vue/repl": "^4.4.3"
+    "@vue/repl": "^4.4.3",
+    "vitepress": "^1.6.3"
+  },
+  "devDependencies": {
+    "@types/node": "^25.6.0"
   }
 }
