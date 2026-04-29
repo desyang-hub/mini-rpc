@@ -143,8 +143,6 @@ bool RpcClient::call(const std::string& srvName, const std::tuple<Args...>& args
 
     int rid;
     std::future<Response> f;
-    IConnectionPool* pool = connnection_pool_factory_->getConnectionPool(name);
-    IConnectionPtr conn = pool->getConnection();
     // 发送数据
     {
         std::lock_guard<std::mutex> lock(mutex_);
@@ -153,7 +151,6 @@ bool RpcClient::call(const std::string& srvName, const std::tuple<Args...>& args
         promiseMap_[rid] = std::promise<Response>();
         f = promiseMap_[rid].get_future();
         ++request_id_;
-        conn->send(bytes);
         if (!send(bytes, name)) return false;
     }
 

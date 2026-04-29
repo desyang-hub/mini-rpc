@@ -40,10 +40,11 @@ FetchContent_MakeAvailable(nacos_cpp)
 # 编译链接库
 #start=============== common ===============
 # 创建静态库
-add_library(common STATIC 
+add_library(common STATIC
     src/minirpc/common/logger.cc
     src/minirpc/common/timeStamp.cc
     src/minirpc/common/utils.cc
+    src/minirpc/core/nacos_config.cc
 )
 # 创建动态库
 # add_library(protocol SHARED 
@@ -60,7 +61,7 @@ target_include_directories(common PUBLIC
 
 #start=============== core ===============
 # 创建静态库
-add_library(core STATIC 
+add_library(core STATIC
     src/minirpc/core/RpcServer.cc
     src/minirpc/core/RpcClient.cc
     src/minirpc/core/RpcConnection.cc
@@ -95,7 +96,6 @@ add_library(net STATIC
     src/minirpc/net/EpollPoller.cc
     src/minirpc/net/TcpServer.cc
     src/minirpc/net/utils.cc
-    src/minirpc/net/TcpClient.cc
 )
 # 创建动态库
 # add_library(protocol SHARED 

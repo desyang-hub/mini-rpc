@@ -7,6 +7,8 @@
 #include <queue>
 #include <string>
 #include <atomic>
+#include <functional>
+#include <thread>
 
 /**
  * @brief 对于一个连接池，对应一个EventLoop，需要管理所有的连接的消息触发，当连接中断，需要将连接状态置为可析构状态，当调用getConnection()方法时，如果连接为可析构状态，那么进入析构
@@ -30,7 +32,9 @@ private:
     std::string group_name_;
 
     int epollfd_ = -1;
-    std::atomic_bool is_running_ = true;
+    std::atomic<bool> pool_running_{true};
+    std::thread loop_thread_;
+    MessageHandler message_handler_ = nullptr;
     ThreadPool threadPool_;
 
 private:
@@ -45,13 +49,16 @@ private:
 
 public:
     explicit RpcConnectionPool(const std::string& server_name, const std::string& group_name = "DEFAULT_GROUP");
-    ~RpcConnectionPool() = default;
+    ~RpcConnectionPool();
 
     // 借连接：若池空且未达上限 → 新建；否则等待（初期可返回 nullptr）
     virtual IConnectionPtr getConnection() override;
 
     // 归还连接：放回池中（不关闭）
     virtual void returnConnection(IConnection* conn) override;
+
+    // Set the message handler callback for the event loop
+    void setMessageHandler(MessageHandler handler) override { message_handler_ = std::move(handler); }
 };
 
 

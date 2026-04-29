@@ -2,7 +2,6 @@
 #include "minirpc/core/utils.h"
 #include "minirpc/net/utils.h"
 #include "minirpc/common/logger.h"
-#include "minirpc/core/RpcClient.h"
 
 #include <sys/epoll.h>
 #include <netinet/in.h>
@@ -35,10 +34,9 @@ void RpcConnectionPool::addConnectionListener(IConnection* conn) {
         if (epollfd_ == -1) {
             LOG_FATAL("epoll create error");
         }
-        
-        // 2. 暂时放在这里启动监听循环
-        std::thread loop_woker(&RpcConnectionPool::loop, this);
-        loop_woker.detach();
+
+        // 2. 启动监听循环（joinable线程，由析构函数负责join）
+        loop_thread_ = std::thread(&RpcConnectionPool::loop, this);
     }
 
     int sockfd = conn->fd();
@@ -62,47 +60,47 @@ void RpcConnectionPool::addConnectionListener(IConnection* conn) {
 
 // 用于epoll管理连接
 void RpcConnectionPool::loop() {
-    // 3. 进行事件监听
-    // epoll_event events[1024];
     std::vector<epoll_event> events(1024);
-    
 
-    while (is_running_.load()) {
-        // 阻塞等待，返回触发的事件个数
-        int numEvents = epoll_wait(epollfd_, events.data(), events.size(), -1); // -1 表示无限等待
+    while (pool_running_.load()) {
+        int numEvents = epoll_wait(epollfd_, events.data(), events.size(), -1);
 
         int saveErrno = errno;
 
         if (numEvents == -1) {
-            if (saveErrno == EINTR) continue; // 被信号中断
+            if (saveErrno == EINTR) continue;
             perror("epoll wait error");
             break;
         }
 
-        // 处理被激活的事件
         for (int i = 0; i < numEvents; ++i) {
             IConnection* c = static_cast<IConnection*>(events[i].data.ptr);
-            int fd = c->fd();
 
-
-            // 这里是一个用户client_fd 事件
-            // 最好使用线程池来进行调度，否则开销巨大
-            // ClienHandler(this, c);
-            // std::thread request_woker(&TcpServer::ClienHandler, this, c);
-            // request_woker.detach();
-
-            threadPool_.enqueue(&RpcClient::messageHandler, &RpcClient::GetInstance(), c);
+            if (message_handler_) {
+                threadPool_.enqueue(message_handler_, c);
+            }
         }
 
-        // 如果事件数量太多了，自动进行扩容
         if (numEvents == events.size()) {
             events.resize(2 * numEvents);
         }
+    }
+
+    if (epollfd_ != -1) {
+        ::close(epollfd_);
+        epollfd_ = -1;
     }
 }
 
 RpcConnectionPool::RpcConnectionPool(const std::string& server_name, const std::string& group_name) : server_name_(server_name), group_name_(group_name) {
 
+}
+
+RpcConnectionPool::~RpcConnectionPool() {
+    pool_running_ = false;
+    if (loop_thread_.joinable()) {
+        loop_thread_.join();
+    }
 }
 
 

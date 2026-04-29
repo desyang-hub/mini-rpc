@@ -17,6 +17,9 @@ public:
     // get connection Pool
     virtual IConnectionPool* getConnectionPool(const std::string& server_name, const std::string& group_name = "DEFAULT_GROUP") = 0;
 
+    // Set the message handler for all connection pools
+    virtual void setMessageHandler(MessageHandler handler) = 0;
+
     static IConnectionPoolFactory* CreateConnectionPoolFactory();
     
 };

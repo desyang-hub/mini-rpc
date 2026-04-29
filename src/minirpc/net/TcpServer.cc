@@ -1,6 +1,7 @@
 #include "minirpc/net/TcpServer.h"
 #include "minirpc/common/logger.h"
 #include "minirpc/core/RpcServer.h"
+#include "minirpc/core/IConnection.h"
 #include "minirpc/net/utils.h"
 
 #include <sys/socket.h>
@@ -13,6 +14,7 @@
 #include <signal.h>
 
 #include "Nacos.h"
+#include "minirpc/core/nacos_config.h"
 
 namespace minirpc
 {
@@ -147,51 +149,31 @@ void TcpServer::removeConn(Conn* c) {
 }
 
 void TcpServer::ClienHandler(TcpServer* server, Conn* c) {
-    // 这里做的就是io处理逻辑，默认使用ET触发模式，需要一次处理完数据
-
-    int cli_fd = c->fd();
-
-    // ET, 必须要一次处理完，直到缓存空了
-    // 接收用户消息，并写回
+    // ET模式：一次处理完所有数据
     while (true) {
         int len = c->readMsg();
-        
-        // 出错了，或断开了
         if (len < 0) {
             LOG_DEBUG("User %d disconnected.", c->fd());
             server->removeConn(c);
             break;
         }
-        else if (len == 0) {
-            LOG_DEBUG("continue recv message.");
-            break;
-        }
-        else {
-            // TODO: 这里理论上应该放回调，当读入了消息就该回调接口
+        if (len == 0) break;
 
-            // 解码读取消息，拷贝消息
-            std::string body;
-            std::string srv_name;
-
-            ProtocolHeader header;
-            // 是否成功解码
-            bool is_success = c->decode(body, srv_name, header);
-            if (is_success) {
-                std::string res;
-                is_success = RpcServer::Call(srv_name, body, res);
-
-                if (!is_success) {
-                    header.code = FAILED;
-                    res = "";
-                }
-
+        std::string body, srv_name;
+        ProtocolHeader header;
+        if (c->decode(body, srv_name, header)) {
+            std::string res;
+            if (RpcServer::Call(srv_name, body, res)) {
                 auto bytes = Encoder::Encode(header, res);
-
-                // 将消息写回, 通过包发送
                 if (send(c->fd(), bytes.data(), bytes.size(), 0) == -1) {
                     LOG_ERROR("send error");
                     break;
                 }
+            }
+            else {
+                header.code = FAILED;
+                auto bytes = Encoder::Encode(header, "");
+                send(c->fd(), bytes.data(), bytes.size(), 0);
             }
         }
     }
@@ -306,7 +288,7 @@ void TcpServer::serve(int port) {
     // 创建socket
     int sockfd = init(port);
 
-    std::string host = "127.0.0.1";
+    std::string host = GetNacosServerHost();
 
     lunch_service_register(port, host);
 

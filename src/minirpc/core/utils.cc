@@ -1,4 +1,5 @@
 #include "minirpc/core/utils.h"
+#include "minirpc/core/nacos_config.h"
 
 #include "minirpc/common/logger.h"
 
@@ -11,6 +12,7 @@
 namespace minirpc
 {
 
+namespace {
 
 size_t WriteCallback(void *contents, size_t size, size_t nmemb, std::string *userp) {
     size_t totalSize = size * nmemb;
@@ -19,6 +21,8 @@ size_t WriteCallback(void *contents, size_t size, size_t nmemb, std::string *use
 }
 
 using json = nlohmann::json;
+
+} // namespace
 
 // 简易解析（不依赖 JSON 库）
 std::string parseFirstInstance(const std::string &jsonStr) {
@@ -37,12 +41,11 @@ std::string parseFirstInstance(const std::string &jsonStr) {
 }
 
 
-// TODO: 暂时使用8848这个临时端口，后期需要用域名来替换
 std::string getServiceAddress(const std::string& srvName) {
     CURL *curl = curl_easy_init();
     std::string response;
     if (curl) {
-        std::string url = "http://127.0.0.1:8848/nacos/v1/ns/instance/list?serviceName=" + srvName;
+        std::string url = "http://" + GetNacosServerAddr() + "/nacos/v1/ns/instance/list?serviceName=" + srvName;
         curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
         curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteCallback);
         curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);

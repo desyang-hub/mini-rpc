@@ -43,7 +43,7 @@ int Dial(int port, const std::string& host) {
     if (connect(clifd, (sockaddr*)&server_addr, sizeof server_addr) < 0) {
         perror("connect error");
         close(clifd);
-        exit(-1);
+        return -1;
     }
 
     return clifd;

@@ -25,7 +25,7 @@ namespace minirpc
 class RpcServer
 {
 private:
-    std::shared_mutex hanelers_mutex_;
+    std::shared_mutex handlers_mutex_;
     std::unordered_map<std::string, RpcHandler> handlers_;
 
     std::vector<std::string> services_;
@@ -52,11 +52,11 @@ private:
         return server;
     }
 public:
-    static void RegisterService(const std::string& clsNmae) {
-        GetInstance().registerService(clsNmae);
+    static void RegisterService(const std::string& className) {
+        GetInstance().registerService(className);
     }
 
-    void registerService(const std::string& clsNmae);
+    void registerService(const std::string& className);
 
     static std::vector<std::string>& GetServices() {
         return GetInstance().getServices();
@@ -88,7 +88,7 @@ public:
 
 
         // 使用写锁
-        std::unique_lock<std::shared_mutex> lock(hanelers_mutex_);
+        std::unique_lock<std::shared_mutex> lock(handlers_mutex_);
 
         // std::cout << handlers_.size() << std::endl;
 

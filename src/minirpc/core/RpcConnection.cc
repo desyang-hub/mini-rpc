@@ -304,4 +304,4 @@ void RpcConnection::setNoDelay(bool enabled) {
     setsockopt(sock_, IPPROTO_TCP, TCP_NODELAY, &opt, sizeof(opt));
 }
 
-}  // namespace rpc
+}  // namespace minirpc

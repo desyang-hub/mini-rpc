@@ -9,7 +9,7 @@
 #include "minirpc/core/IConnection.h"
 
 #include "minirpc/net/TcpServer.h"
-#include "minirpc/net/TcpClient.h"
+
 
 using namespace minirpc;
 

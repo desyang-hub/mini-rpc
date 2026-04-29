@@ -11,7 +11,7 @@
 namespace minirpc
 {
 // 回调函数：将 curl 获取的数据追加到 std::string
-static size_t WriteCallback(void *contents, size_t size, size_t nmemb, std::string *userp);
+// Note: WriteCallback is file-local (defined in utils.cc), not exposed in header.
 
 // 简易解析（不依赖 JSON 库）
 std::string parseFirstInstance(const std::string &jsonStr);

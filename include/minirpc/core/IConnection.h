@@ -5,6 +5,7 @@
 
 #include <memory>
 #include <string>
+#include <functional>
 
 namespace minirpc {
 
@@ -47,6 +48,22 @@ public:
     virtual void set_master_pool(IConnectionPool* pool) {}
 
     static std::unique_ptr<IConnection, Deleter> GetConnection(const std::string& host, uint16_t port);
+
+    // Common read+decode loop for ET-triggered event handling.
+    // Returns false on error/disconnect, true after processing completes.
+    inline static bool processConnection(IConnection* conn,
+        std::function<bool(ProtocolHeader&, std::string&)> proc) {
+        while (true) {
+            int len = conn->readMsg();
+            if (len < 0) return false;
+            if (len == 0) break;
+            ProtocolHeader header;
+            std::string body;
+            if (!conn->decode(header, body)) continue;
+            if (!proc(header, body)) return false;
+        }
+        return true;
+    }
 };
 
 

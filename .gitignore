@@ -3,6 +3,7 @@
 dependense/
 
 build/
+build-test/
 build-release/
 
 bin/

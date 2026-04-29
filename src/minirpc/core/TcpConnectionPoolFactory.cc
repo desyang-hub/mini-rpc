@@ -28,6 +28,9 @@ IConnectionPool* TcpConnectionPoolFactory::getConnectionPool(const std::string& 
 
     // 否则获取池，将池放到factory管理，并返回ptr
     ptr = IConnectionPool::GetConnectionPool(server_name, group_name);
+    if (message_handler_) {
+        ptr->setMessageHandler(message_handler_);
+    }
     {
         std::unique_lock<std::shared_mutex> lock(sd_mutex_);
         connection_pools_[key] = std::unique_ptr<IConnectionPool>(ptr);

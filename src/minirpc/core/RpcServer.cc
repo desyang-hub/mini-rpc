@@ -2,10 +2,10 @@
 
 namespace minirpc
 {
-    void RpcServer::registerService(const std::string& clsNmae) {
-        LOG_INFO("regis name %s", clsNmae.c_str());
-        std::unique_lock<std::shared_mutex> lock(hanelers_mutex_);
-        services_.push_back(clsNmae);
+    void RpcServer::registerService(const std::string& className) {
+        LOG_INFO("register service: %s", className.c_str());
+        std::unique_lock<std::shared_mutex> lock(handlers_mutex_);
+        services_.push_back(className);
     }
 
     bool RpcServer::call(const std::string &name, const std::string &body, std::string &res)
@@ -13,7 +13,7 @@ namespace minirpc
         std::unordered_map<std::string, RpcHandler>::iterator it{};
         {
             // 使用读锁
-            std::shared_lock<std::shared_mutex> lock(hanelers_mutex_);
+            std::shared_lock<std::shared_mutex> lock(handlers_mutex_);
             it = handlers_.find(name);
         }
 
