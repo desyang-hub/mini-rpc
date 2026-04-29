@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "dev": "vitepress dev",
-    "build": "vitepress build && node scripts/create-root-redirect.mjs",
+    "build": "vitepress build",
     "preview": "vitepress preview"
   },
   "dependencies": {
