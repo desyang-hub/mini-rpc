@@ -1,0 +1,14 @@
+{
+  "name": "mini-rpc-docs",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vitepress dev",
+    "build": "vitepress build",
+    "preview": "vitepress preview"
+  },
+  "dependencies": {
+    "vitepress": "^1.6.3",
+    "@vue/repl": "^4.4.3"
+  }
+}
