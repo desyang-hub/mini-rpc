@@ -79,7 +79,7 @@ export default defineConfig({
   title: 'Mini-RPC',
   description: '轻量级 C++ RPC 框架',
   head: [
-    ['link', { rel: 'icon', href: base + 'logo.svg', type: 'image/svg+xml' }],
+    ['link', { rel: 'icon', href: '/logo.svg', type: 'image/svg+xml' }],
     ['meta', { name: 'theme-color', content: '#5f67ee' }],
     ['meta', { property: 'og:type', content: 'website' }],
     ['meta', { property: 'og:locale', content: 'zh-CN' }],
@@ -87,7 +87,7 @@ export default defineConfig({
     ['meta', { property: 'og:description', content: '轻量级 C++ RPC 框架' }],
   ],
   themeConfig: {
-    logo: { src: base + 'logo.svg', width: 24, height: 24 },
+    logo: { src: '/logo.svg', width: 24, height: 24 },
     outline: { level: [2, 3] },
     socialLinks: [
       { icon: 'github', link: 'https://github.com/desyang-hub/mini-rpc' },
@@ -108,17 +108,17 @@ export default defineConfig({
     root: {
       label: '简体中文',
       lang: 'zh-CN',
-      link: base + 'zh/',
+      link: '/zh/',
       themeConfig: {
         nav: [
-          { text: '指南', link: '/zh/guide/getting-started.html', activeMatch: base + 'zh/guide/' },
-          { text: 'API', link: '/zh/api/reference.html', activeMatch: base + 'zh/api/' },
-          { text: '部署', link: '/zh/deploy/nacos.html', activeMatch: base + 'zh/deploy/' },
-          { text: '关于', link: '/zh/about/changelog.html', activeMatch: base + 'zh/about/' },
+          { text: '指南', link: '/zh/guide/getting-started.html', activeMatch: '^/zh/guide/' },
+          { text: 'API', link: '/zh/api/reference.html', activeMatch: '^/zh/api/' },
+          { text: '部署', link: '/zh/deploy/nacos.html', activeMatch: '^/zh/deploy/' },
+          { text: '关于', link: '/zh/about/changelog.html', activeMatch: '^/zh/about/' },
         ],
         selectLanguageName: '简体中文',
         sidebar: {
-          [base + 'zh/']: zhSidebar,
+          ['^/zh/']: zhSidebar,
         },
         docFooter: { prev: '上一页', next: '下一页' },
         outline: { label: '页面导航' },
@@ -133,17 +133,17 @@ export default defineConfig({
     en: {
       label: 'English',
       lang: 'en-US',
-      link: base + 'en/',
+      link: '/en/',
       themeConfig: {
         nav: [
-          { text: 'Guide', link: '/en/guide/getting-started.html', activeMatch: base + 'en/guide/' },
-          { text: 'API', link: '/en/api/reference.html', activeMatch: base + 'en/api/' },
-          { text: 'Deploy', link: '/en/deploy/nacos.html', activeMatch: base + 'en/deploy/' },
-          { text: 'About', link: '/en/about/changelog.html', activeMatch: base + 'en/about/' },
+          { text: 'Guide', link: '/en/guide/getting-started.html', activeMatch: '^/en/guide/' },
+          { text: 'API', link: '/en/api/reference.html', activeMatch: '^/en/api/' },
+          { text: 'Deploy', link: '/en/deploy/nacos.html', activeMatch: '^/en/deploy/' },
+          { text: 'About', link: '/en/about/changelog.html', activeMatch: '^/en/about/' },
         ],
         selectLanguageName: 'English',
         sidebar: {
-          [base + 'en/']: enSidebar,
+          ['^/en/']: enSidebar,
         },
         docFooter: { prev: 'Previous', next: 'Next' },
         outline: { label: 'On this page' },
