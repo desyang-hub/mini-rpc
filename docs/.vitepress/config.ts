@@ -94,7 +94,7 @@ export default defineConfig({
     ],
     footer: {
       message: 'Released under the MIT License.',
-      copyright: 'Copyright © 2024-present desyang',
+      copyright: 'Copyright © 2026-present desyang',
     },
     search: {
       provider: 'local',
