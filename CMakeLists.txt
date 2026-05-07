@@ -45,6 +45,7 @@ add_library(common STATIC
     src/minirpc/common/timeStamp.cc
     src/minirpc/common/utils.cc
     src/minirpc/core/nacos_config.cc
+    src/minirpc/common/Random.cc
 )
 # 创建动态库
 # add_library(protocol SHARED 
@@ -118,7 +119,7 @@ target_include_directories(net PUBLIC
 target_link_libraries(net PRIVATE 
     protocol
     common
-    nacos-cli-static # 静态链接库
+    nacos-cli # 静态链接库
     curl
     z
 )

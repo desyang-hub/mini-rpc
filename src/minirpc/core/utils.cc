@@ -2,6 +2,7 @@
 #include "minirpc/core/nacos_config.h"
 
 #include "minirpc/common/logger.h"
+#include "minirpc/common/Random.h"
 
 #include <curl/curl.h>  // libcurl 主头文件
 #include <stdexcept>
@@ -34,6 +35,7 @@ std::string parseFirstInstance(const std::string &jsonStr) {
     a = a["hosts"];
     
     if (a.size()) {
+        int idx = Random::RandInt(0, a.size());
         return a[0]["ip"].get<std::string>() + ":" + std::to_string(a[0]["port"].get<int>());
     }
 
