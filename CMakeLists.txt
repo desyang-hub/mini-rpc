@@ -1,6 +1,11 @@
 cmake_minimum_required(VERSION 3.20)
 
-project(minirpc VERSION 1.5.2)
+# get minirpc version by minirpc/version.h
+include(cmake/version.cmake)
+minirpc_extract_version()
+
+project(minirpc VERSION ${MINIRPC_VERSION})
+message(STATUS "Build minirpc: ${MINIRPC_VERSION}")
 
 # setting luchange standerd
 set(CMAKE_CXX_STANDARD 17) # equal -std=c++14
