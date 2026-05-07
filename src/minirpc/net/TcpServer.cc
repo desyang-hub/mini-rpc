@@ -32,12 +32,14 @@ namespace minirpc
         
         auto g_namingSvc = factory->CreateNamingService();
         ResourceGuard<NamingService> _serviceGuard(g_namingSvc);
+
+        LOG_INFO("register server instanse %s:%d", host.c_str(), server_port);
     
         Instance instance;
         instance.clusterName = "DefaultCluster";
         instance.ip = host;
         instance.port = server_port;
-        instance.instanceId = "1";
+        // instance.instanceId = "1";
         instance.ephemeral = true;
     
         // 注册服务

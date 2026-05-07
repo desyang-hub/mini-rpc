@@ -1,6 +1,11 @@
 cmake_minimum_required(VERSION 3.20)
 
-project(minirpc VERSION 1.5.2)
+# get minirpc version by minirpc/version.h
+include(cmake/version.cmake)
+minirpc_extract_version()
+
+project(minirpc VERSION ${MINIRPC_VERSION})
+message(STATUS "Build minirpc: ${MINIRPC_VERSION}")
 
 # setting luchange standerd
 set(CMAKE_CXX_STANDARD 17) # equal -std=c++14
@@ -45,6 +50,7 @@ add_library(common STATIC
     src/minirpc/common/timeStamp.cc
     src/minirpc/common/utils.cc
     src/minirpc/core/nacos_config.cc
+    src/minirpc/common/Random.cc
 )
 # 创建动态库
 # add_library(protocol SHARED 
@@ -118,7 +124,7 @@ target_include_directories(net PUBLIC
 target_link_libraries(net PRIVATE 
     protocol
     common
-    nacos-cli-static # 静态链接库
+    nacos-cli # 静态链接库
     curl
     z
 )
