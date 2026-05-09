@@ -28,7 +28,7 @@ class ThreadPool
 private:
     std::queue<TaskHandler> queue_;
     std::vector<std::thread> workers_;
-    std::mutex mutex_;
+    mutable std::mutex mutex_;
     bool is_running_;
     std::condition_variable condition_;
 

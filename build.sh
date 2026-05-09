@@ -1,1 +1,1 @@
-cmake -DBUILD_TESTS=ON ..
+cmake -B build && cmake --build build -j$(nproc)

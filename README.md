@@ -36,9 +36,7 @@ sudo apt-get install -y cmake g++ libgtest-dev libcurl4-openssl-dev zlib1g-dev
 ```bash
 git clone https://github.com/desyang-hub/mini-rpc.git
 cd mini-rpc
-mkdir build && cd build
-cmake ..
-make -j$(nproc)
+cmake -B build && cmake --build build -j$(nproc)
 ```
 
 ### Run Example
