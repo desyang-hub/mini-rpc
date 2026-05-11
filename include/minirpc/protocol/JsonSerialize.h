@@ -8,14 +8,19 @@ namespace minirpc
 
 class JsonSerialize
 {
+private:
+    JsonSerialize() {}
 
 public:
-    JsonSerialize() = default;
+    static JsonSerialize& GetInstance() {
+        static JsonSerialize instance_;
+        return instance_;
+    }
 
     // 序列化接口
     /// @param body: 待序列化的数据
     template<class T>
-    std::string serialization(T& obj) {
+    std::string serialization(const T& obj) {
         return nlohmann::json(obj).dump();
     }
 

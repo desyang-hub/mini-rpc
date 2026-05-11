@@ -170,7 +170,8 @@ target_link_libraries(minirpc_main PRIVATE
 
 
 #start =============== example ===============
-add_subdirectory(example)
+# add_subdirectory(example)
+add_subdirectory(examples)
 #end =============== example ===============
 
 
