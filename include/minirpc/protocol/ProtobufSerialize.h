@@ -2,6 +2,7 @@
 
 #include <iostream>
 #include <google/protobuf/message.h>
+#include <minirpc/common/logger.h>
 
 namespace minirpc
 {
@@ -41,6 +42,7 @@ public:
 
         ProtobufMessageInherit obj;
         if (!obj.ParseFromString(serializeStr)) {
+            LOG_ERROR("Protobuf Deserial failed: %s", serializeStr.c_str());
             throw std::runtime_error("Protobuf deserialization failed");
         }
         return obj;

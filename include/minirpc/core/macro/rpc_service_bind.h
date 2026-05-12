@@ -65,29 +65,13 @@
 //         }); \
 //     } while(0)
 
-#define _RPC_BIND_METHOD(Class, Method)         \
-    do              \
-    {               \
-        auto &instance = Class::GetInstance(); \
-        auto instancePtr = &instance;\
-        using MethodType = decltype(&Class::Method); \
-        using param_tuple = typename minirpc::function_traits<MethodType>::args_tuple;                      \
-        using return_type = typename minirpc::function_traits<MethodType>::return_type;\
-        \
-        /* ✅ 修改：Lambda 的参数还是 tuple，但内部调用 f 时要解开 */ \
-        minirpc::RpcServer::Bind(#Class "." #Method, [instancePtr](const param_tuple &received_tuple) { \
-            if constexpr (std::is_void_v<return_type>) { \
-                /* 如果是 void，解开 tuple 调用 f */ \
-                minirpc::rpc_apply([instancePtr](auto&&... args) { \
-                    instancePtr->Method(std::forward<decltype(args)>(args)...); \
-                }, received_tuple); \
-            } else { \
-                /* 如果有返回值，解开 tuple 调用 f 并 return */ \
-                return minirpc::rpc_apply([instancePtr](auto&&... args) { \
-                    return instancePtr->Method(std::forward<decltype(args)>(args)...); \
-                }, received_tuple); \
-            } }); \
-    } while (0)
+// #define _RPC_BIND_METHOD(Class, Method)         \
+    // 宏只负责提取类型并调用模板函数
+
+#define _RPC_BIND_METHOD(Class, Method) \
+do { \
+    minirpc::bind_rpc_method_impl<Class>(#Class "." #Method, &Class::Method); \
+} while (0)
 
 // 3. 定义不同参数数量的实现宏
 // 注意：这里的 N 代表总参数个数（包括 Class）

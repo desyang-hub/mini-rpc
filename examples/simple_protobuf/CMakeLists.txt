@@ -18,7 +18,7 @@ endif()
 find_package(Protobuf REQUIRED)
 
 # === 3. 指定 .proto 文件路径 ===
-set(PROTO_FILE ${CMAKE_CURRENT_SOURCE_DIR}/protoc/person.proto)
+set(PROTO_FILE ${CMAKE_CURRENT_SOURCE_DIR}/protoc/user.proto)
 if(NOT EXISTS ${PROTO_FILE})
     message(FATAL_ERROR "Proto file not found: ${PROTO_FILE}")
 endif()
@@ -27,14 +27,40 @@ endif()
 protobuf_generate_cpp(PROTO_SRC PROTO_HEADER ${PROTO_FILE})
 
 # === 5. 创建可执行文件 ===
-add_executable(protobuf_demo protobuf_demo.cc ${PROTO_SRC})
+add_executable(client_protobuf
+    Client.cc
+    ${PROTO_SRC}
+)
+
+add_executable(server_protobuf
+    UserService.cc
+    Server.cc
+    ${PROTO_SRC}
+)
 
 # === 6. 设置头文件搜索路径（生成的 .pb.h 在构建目录）===
-target_include_directories(protobuf_demo PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
+target_include_directories(client_protobuf 
+    PRIVATE ${CMAKE_CURRENT_BINARY_DIR}
+)
+
+target_include_directories(server_protobuf 
+    PRIVATE ${CMAKE_CURRENT_BINARY_DIR}
+)
+# target_include_directories(simple_protobuf PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
 
 # === 7. 链接 Protobuf 库（否则会链接错误）===
-target_link_libraries(protobuf_demo 
+target_link_libraries(client_protobuf 
     ${Protobuf_LIBRARIES}
     net
     protocol
+    protobuf
+    core
+)
+
+target_link_libraries(server_protobuf 
+    ${Protobuf_LIBRARIES}
+    net
+    protocol
+    protobuf
+    core
 )

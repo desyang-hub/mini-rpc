@@ -35,8 +35,8 @@ target_include_directories(nlohmann_json_interface INTERFACE
 # nacos-cpp
 FetchContent_Declare(
     nacos_cpp
-    GIT_REPOSITORY https://github.com/nacos-group/nacos-sdk-cpp.git
-    GIT_TAG        v1.1.1  # 推荐使用较新稳定版，支持 CMake
+    GIT_REPOSITORY https://github.com/desyang-hub/nacos-sdk-cpp.git
+    GIT_TAG        v1.1.2  # 推荐使用较新稳定版，支持 CMake
 )
 FetchContent_MakeAvailable(nacos_cpp)
 

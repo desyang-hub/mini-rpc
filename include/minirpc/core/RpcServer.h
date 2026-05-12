@@ -79,31 +79,62 @@ public:
 
         using DecayFunc = typename std::decay<Func>::type;
 
-        using param_type = typename function_traits<DecayFunc>::args_tuple;
-        // 去除引用
-        using T = typename std::decay<param_type>::type;
-
+        // 判断参数个数是否是一个
         using return_type = typename function_traits<DecayFunc>::return_type;
-        using R = typename std::remove_reference<return_type>::type;
 
-
-        // 使用写锁
-        std::unique_lock<std::shared_mutex> lock(handlers_mutex_);
-
-        // std::cout << handlers_.size() << std::endl;
-
-        // 确保注册的名称是不一样的，为了确保多重不一致，可以选择将域也作为名称前缀
-        // assert(handlers_.count(name) == 0 && "RpcServer name ambiguity.");
-
-        handlers_[name] = [f = std::forward<Func>(fun)](const std::string &body, std::string &res)
-        {
-            // 反序列化
-            auto param = Serialize::Deserialization<T>(body);
-
-            call_and_serialize(f, param, res);
-        };
-
-        LOG_INFO("RpcServer bind %s", name.c_str());
+        if constexpr (function_traits<DecayFunc>::is_single_arg) {
+            using param_type = typename function_traits<DecayFunc>::first_arg;
+            // 去除引用
+            using T = typename std::decay<param_type>::type;
+    
+            
+            using R = typename std::remove_reference<return_type>::type;
+    
+    
+            // 使用写锁
+            std::unique_lock<std::shared_mutex> lock(handlers_mutex_);
+    
+            // std::cout << handlers_.size() << std::endl;
+    
+            // 确保注册的名称是不一样的，为了确保多重不一致，可以选择将域也作为名称前缀
+            // assert(handlers_.count(name) == 0 && "RpcServer name ambiguity.");
+    
+            handlers_[name] = [f = std::forward<Func>(fun)](const std::string &body, std::string &res)
+            {
+                // 反序列化
+                auto param = Serialize::Deserialization<T>(body);
+    
+                call_and_serialize(f, param, res);
+            };
+    
+            LOG_INFO("RpcServer bind %s", name.c_str());
+        } else {
+            using param_type = typename function_traits<DecayFunc>::args_tuple;
+            // 去除引用
+            using T = typename std::decay<param_type>::type;
+    
+            
+            using R = typename std::remove_reference<return_type>::type;
+    
+    
+            // 使用写锁
+            std::unique_lock<std::shared_mutex> lock(handlers_mutex_);
+    
+            // std::cout << handlers_.size() << std::endl;
+    
+            // 确保注册的名称是不一样的，为了确保多重不一致，可以选择将域也作为名称前缀
+            // assert(handlers_.count(name) == 0 && "RpcServer name ambiguity.");
+    
+            handlers_[name] = [f = std::forward<Func>(fun)](const std::string &body, std::string &res)
+            {
+                // 反序列化
+                auto param = Serialize::Deserialization<T>(body);
+    
+                call_and_serialize(f, param, res);
+            };
+    
+            LOG_INFO("RpcServer bind %s", name.c_str());
+        }
     }
 
 
@@ -114,5 +145,46 @@ public:
     bool call(const std::string &name, const std::string &body, std::string &res);
     
 };
+
+
+// 辅助模板函数
+template<typename Class, typename MethodPtr>
+inline void bind_rpc_method_impl(const std::string& name, MethodPtr method_ptr) {
+    using traits = minirpc::function_traits<MethodPtr>;
+    using return_type = typename traits::return_type;
+
+    auto& instance = Class::GetInstance();
+    auto instancePtr = &instance;
+
+    if constexpr (traits::is_single_arg) {
+        using arg_type = typename traits::first_arg;
+        minirpc::RpcServer::Bind(
+            name, 
+            [instancePtr, method_ptr](arg_type arg) -> return_type {
+                if constexpr (std::is_void_v<return_type>) {
+                    (instancePtr->*method_ptr)(std::forward<arg_type>(arg));
+                } else {
+                    return (instancePtr->*method_ptr)(std::forward<arg_type>(arg));
+                }
+            }
+        );
+    } else {
+        using param_tuple = typename traits::args_tuple;
+        minirpc::RpcServer::Bind(
+            name,
+            [instancePtr, method_ptr](const param_tuple& received_tuple) -> return_type {
+                if constexpr (std::is_void_v<return_type>) {
+                    minirpc::rpc_apply([instancePtr, method_ptr](auto&&... args) {
+                        (instancePtr->*method_ptr)(std::forward<decltype(args)>(args)...);
+                    }, received_tuple);
+                } else {
+                    return minirpc::rpc_apply([instancePtr, method_ptr](auto&&... args) -> return_type {
+                        return (instancePtr->*method_ptr)(std::forward<decltype(args)>(args)...);
+                    }, received_tuple);
+                }
+            }
+        );
+    }
+}
 
 } // namespace minirpc

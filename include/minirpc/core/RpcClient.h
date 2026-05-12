@@ -68,6 +68,12 @@ private:
 
     // 私有构造，只允许单例，仅在第一个Stub创建时初始化
     RpcClient();
+
+    template<class T, class R>
+    uint8_t call_impl(const std::string& srvName, T&& arg, R& ret);
+
+    template<class T>
+    uint8_t call_impl(const std::string& srvName, T&& arg);
 public:    
     ~RpcClient();
 
@@ -80,20 +86,28 @@ public:
     template<class R, typename ...Args>
     inline uint8_t call(const std::string& srvName, const std::tuple<Args...>& args, R& ret);
 
+    template<class R, typename Arg>
+    inline uint8_t call(const std::string& srvName, Arg&& arg, R& ret);
+
     template<typename ...Args>
     inline bool call(const std::string& srvName, const std::tuple<Args...>& args);
 
+    template<typename Arg>
+    inline bool call(const std::string& srvName, Arg&& arg);
 
     template<class T, typename ...Args> 
     inline std::future<T> async_call(const std::string& srvName, const std::tuple<Args...>& args);
 
+    template<class T, typename Arg> 
+    inline std::future<T> async_call(const std::string& srvName, Arg&& arg);
+
 };
 
 
-template<class R, typename ...Args>
-uint8_t RpcClient::call(const std::string& srvName, const std::tuple<Args...>& args, R& ret) {
 
-    std::string body = Serialize::Serialization(args);
+template<class T, class R>
+inline uint8_t RpcClient::call_impl(const std::string& srvName, T&& arg, R& ret) {
+    std::string body = Serialize::Serialization(std::forward<T>(arg));
     // 需要设置Request_id
     auto bytes = Encoder::Encode(srvName, body);
 
@@ -128,13 +142,12 @@ uint8_t RpcClient::call(const std::string& srvName, const std::tuple<Args...>& a
         ret = Serialize::Deserialization<R>(r.data);
     }
 
-    return r.state;
+    return r.state;    
 }
 
-
-template<typename ...Args>
-bool RpcClient::call(const std::string& srvName, const std::tuple<Args...>& args) {
-    std::string body = Serialize::Serialization(args);
+template<class T>
+inline uint8_t RpcClient::call_impl(const std::string& srvName, T&& arg) {
+    std::string body = Serialize::Serialization(std::forward<T>(arg));
     // 需要设置Request_id
     auto bytes = Encoder::Encode(srvName, body);
 
@@ -159,10 +172,32 @@ bool RpcClient::call(const std::string& srvName, const std::tuple<Args...>& args
 }
 
 
+template<class R, typename ...Args>
+inline uint8_t RpcClient::call(const std::string& srvName, const std::tuple<Args...>& args, R& ret) {
+    return call_impl(srvName, args, ret);
+}
+
+template<class R, typename Arg>
+inline uint8_t RpcClient::call(const std::string& srvName, Arg&& arg, R& ret) {
+    return call_impl(srvName, std::forward<Arg>(arg), ret);
+}
+
+
+template<typename ...Args>
+inline bool RpcClient::call(const std::string& srvName, const std::tuple<Args...>& args) {
+    return call_impl(srvName, args);
+}
+
+template<typename Arg>
+inline bool RpcClient::call(const std::string& srvName, Arg&& arg) {
+    return call_impl(srvName, std::forward<Arg>(arg));
+}
+
+
 template<class T, typename ...Args> 
-std::future<T> RpcClient::async_call(const std::string& srvName, const std::tuple<Args...>& args) {
+inline std::future<T> RpcClient::async_call(const std::string& srvName, const std::tuple<Args...>& args) {
     // set{bool, promise}
-    std::future<T> f = std::async(std::launch::async, [&srvName, &args](){
+    std::future<T> f = std::async(std::launch::async, [srvName, args](){
         // 判断类型是不是空
         bool is_success;
         if constexpr (std::is_void_v<T>) {
@@ -172,6 +207,26 @@ std::future<T> RpcClient::async_call(const std::string& srvName, const std::tupl
         else {
             T res;
             is_success = call(srvName, args, res);
+            return res;
+        }
+    });
+
+    return f;
+}
+
+template<class T, typename Arg> 
+inline std::future<T> RpcClient::async_call(const std::string& srvName, Arg&& arg) {
+    // set{bool, promise}
+    std::future<T> f = std::async(std::launch::async, [srvName, arg](){
+        // 判断类型是不是空
+        bool is_success;
+        if constexpr (std::is_void_v<T>) {
+            is_success = call(srvName, arg);
+            return;
+        }
+        else {
+            T res;
+            is_success = call(srvName, arg, res);
             return res;
         }
     });

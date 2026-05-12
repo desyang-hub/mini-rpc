@@ -3,7 +3,6 @@ syntax = "proto3";
 package example;
 
 message User {
-  int32 id = 1;
-  string name = 2;
-  string pass = 3;
+  string name = 1;
+  string pass = 2;
 }

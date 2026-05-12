@@ -6,6 +6,7 @@
 
 #include <curl/curl.h>  // libcurl 主头文件
 #include <stdexcept>
+#include <assert.h>
 
 #include "nlohmann/json.hpp"
 
@@ -29,10 +30,12 @@ using json = nlohmann::json;
 std::string parseFirstInstance(const std::string &jsonStr) {
 
 
-    LOG_INFO("jsonStr: %s", jsonStr.c_str());
+    // LOG_INFO("jsonStr: %s", jsonStr.c_str());
 
     json a = json::parse(jsonStr);
     a = a["hosts"];
+
+    assert(a.size() && "Valid service instance is empty.");
     
     if (a.size()) {
         int idx = Random::RandInt(0, a.size());

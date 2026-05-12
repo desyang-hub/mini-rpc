@@ -18,6 +18,8 @@ IConnectionPtr RpcConnectionPool::connect() {
     // 目前只用了server_name
     std::string ipAddr = getServiceAddress(server_name_);
 
+    LOG_INFO("Service info: %s", ipAddr.c_str());
+
     int id = ipAddr.find(':');
     std::string ip = ipAddr.substr(0, id);
     std::string port = ipAddr.substr(id + 1);

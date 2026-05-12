@@ -14,37 +14,62 @@
 #define _RPC_STUB_METHOD(Class, Method) \
     /* 类型萃取 */ \
     using MethodType_##Method = decltype(&Class::Method); \
-    using ReturnType_##Method = typename minirpc::function_traits<MethodType_##Method>::return_type; \
-    using ArgsTuple_##Method = typename minirpc::function_traits<MethodType_##Method>::args_tuple; \
+    using traits_##Method = minirpc::function_traits<MethodType_##Method>; \
+    using ReturnType_##Method = typename traits_##Method::return_type; \
+    using ArgsTuple_##Method = typename traits_##Method::args_tuple; \
+    static constexpr size_t arity_##Method = traits_##Method::arity; \
     \
-    /* 辅助类型：如果是 void 则用 int 占位，避免定义 void 变量 */ \
-    using RetType_##Method = typename std::conditional<std::is_void<ReturnType_##Method>::value, int, ReturnType_##Method>::type; \
+    /* 辅助类型：void 替换为 int */ \
+    using RetType_##Method = typename std::conditional< \
+        std::is_void_v<ReturnType_##Method>, \
+        int, \
+        ReturnType_##Method \
+    >::type; \
     \
-    /* ✅ 修改点：使用可变参数模板 (Args&&... args)，允许用户直接传参 */ \
     template<typename... Args> \
     ReturnType_##Method Method(Args&&... args) { \
-        static_assert(std::is_convertible_v<std::tuple<std::decay_t<Args>...>, ArgsTuple_##Method>, "Parameter types mismatch for method " #Method); \
+        /* 参数个数必须匹配 */ \
+        static_assert(sizeof...(Args) == arity_##Method, "Argument count mismatch for method " #Method); \
+        \
+        /* 类型兼容性检查 */ \
+        \
         std::string srvName = #Class "." #Method; \
+        auto& client = minirpc::RpcClient::GetInstance(); \
         \
-        /* ✅ 修改点：在函数内部手动打包成 tuple */ \
-        ArgsTuple_##Method args_tuple = std::make_tuple(std::forward<Args>(args)...); \
-        \
-        RetType_##Method ret_val; \
-        \
-        if constexpr (std::is_void_v<ReturnType_##Method>) { \
-            uint8_t code = minirpc::RpcClient::GetInstance().call(srvName, args_tuple); \
-            if (code != minirpc::SUCCESS) { \
-                throw minirpc::RpcException("RPC Call Failed: err_code=" + std::to_string(code)); \
+        if constexpr (arity_##Method == 1) { \
+            /* 单参数：直接取第一个参数（无需 tuple） */ \
+            auto&& arg = []<typename T>(T&& t) -> T&& { return std::forward<T>(t); }(args...); \
+            \
+            if constexpr (std::is_void_v<ReturnType_##Method>) { \
+                uint8_t code = client.call(srvName, arg); \
+                if (code != minirpc::SUCCESS) { \
+                    throw minirpc::RpcException("RPC Call Failed: err_code=" + std::to_string(code)); \
+                } \
+            } else { \
+                RetType_##Method ret_val; \
+                uint8_t code = client.call(srvName, arg, ret_val); \
+                if (code != minirpc::SUCCESS) { \
+                    throw minirpc::RpcException("RPC Call Failed: err_code=" + std::to_string(code)); \
+                } \
+                return static_cast<ReturnType_##Method>(ret_val); \
             } \
         } else { \
-            uint8_t code = minirpc::RpcClient::GetInstance().call(srvName, args_tuple, ret_val); \
-            if (code != minirpc::SUCCESS) { \
-                throw minirpc::RpcException("RPC Call Failed: err_code=" + std::to_string(code)); \
+            /* 多参数：打包成 tuple */ \
+            ArgsTuple_##Method args_tuple = std::make_tuple(std::forward<Args>(args)...); \
+            \
+            if constexpr (std::is_void_v<ReturnType_##Method>) { \
+                uint8_t code = client.call(srvName, args_tuple); \
+                if (code != minirpc::SUCCESS) { \
+                    throw minirpc::RpcException("RPC Call Failed: err_code=" + std::to_string(code)); \
+                } \
+            } else { \
+                RetType_##Method ret_val; \
+                uint8_t code = client.call(srvName, args_tuple, ret_val); \
+                if (code != minirpc::SUCCESS) { \
+                    throw minirpc::RpcException("RPC Call Failed: err_code=" + std::to_string(code)); \
+                } \
+                return static_cast<ReturnType_##Method>(ret_val); \
             } \
-        } \
-        \
-        if constexpr (!std::is_void_v<ReturnType_##Method>) { \
-            return static_cast<ReturnType_##Method>(ret_val); \
         } \
     }
 

@@ -22,6 +22,12 @@ struct function_traits<R (C::*)(std::tuple<Args...>) const>
     using return_type = R;
     // 直接使用原本的 tuple，不再次包装
     using args_tuple = std::tuple<Args...>;
+
+    static constexpr size_t arity = sizeof...(Args); // 参数个数
+    static constexpr bool is_single_arg = (arity == 1); // 是否单参数
+    // 只有当 arity == 1 时，first_arg 才有意义
+    using first_arg = std::tuple_element_t<0, args_tuple>;
+
 };
 
 // 版本 1：匹配 const 引用 (Lambda 最常见的形式)
@@ -30,6 +36,11 @@ struct function_traits<R (C::*)(const std::tuple<Args...> &) const>
 {
     using return_type = R;
     using args_tuple = std::tuple<Args...>; // 直接解包，不再次包装
+
+    static constexpr size_t arity = sizeof...(Args); // 参数个数
+    static constexpr bool is_single_arg = (arity == 1); // 是否单参数
+    // 只有当 arity == 1 时，first_arg 才有意义
+    using first_arg = std::tuple_element_t<0, args_tuple>;
 };
 
 // template<class R, class T>
@@ -45,6 +56,11 @@ struct function_traits<R (*)(Args...)>
 {
     using return_type = R;
     using args_tuple = std::tuple<std::decay_t<Args>...>;
+
+    static constexpr size_t arity = sizeof...(Args); // 参数个数
+    static constexpr bool is_single_arg = (arity == 1); // 是否单参数
+    // 只有当 arity == 1 时，first_arg 才有意义
+    using first_arg = std::tuple_element_t<0, args_tuple>;
 };
 
 // template<class R, class T>
@@ -68,6 +84,11 @@ struct function_traits<R (ClassType::*)(Args...)>
 {
     using return_type = R;
     using args_tuple = std::tuple<std::decay_t<Args>...>;
+
+    static constexpr size_t arity = sizeof...(Args); // 参数个数
+    static constexpr bool is_single_arg = (arity == 1); // 是否单参数
+    // 只有当 arity == 1 时，first_arg 才有意义
+    using first_arg = std::tuple_element_t<0, args_tuple>;
 };
 
 // 3. Lambda / 仿函数 (处理 const 成员函数)
@@ -85,6 +106,11 @@ struct function_traits<R (ClassType::*)(Args...) const>
     using return_type = R;
     // 使用 std::decay_t 去除引用和 const，确保得到纯类型
     using args_tuple = std::tuple<std::decay_t<Args>...>;
+
+    static constexpr size_t arity = sizeof...(Args); // 参数个数
+    static constexpr bool is_single_arg = (arity == 1); // 是否单参数
+    // 只有当 arity == 1 时，first_arg 才有意义
+    using first_arg = std::tuple_element_t<0, args_tuple>;
 };
 
 // 针对 Lambda (通过推导其 operator())

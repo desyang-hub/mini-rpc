@@ -29,6 +29,7 @@ jobs:
       run: |
         sudo apt-get update
         sudo apt-get install -y libgtest-dev libcurl4-openssl-dev
+        sudo apt install -y protobuf-compiler libprotobuf-dev libprotoc-dev
 
     # 手动编译 GTest（可选：也可缓存 /usr/lib/libgtest*.a，但通常不必要）
     - name: Build Google Test
