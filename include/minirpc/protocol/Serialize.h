@@ -4,9 +4,18 @@
 #include "minirpc/protocol/JsonSerialize.h"
 #include "minirpc/protocol/ProtobufSerialize.h"
 
+#include <google/protobuf/message.h>
+
 #include <iostream>
 #include <cstdint>   // 添加这行
 #include <cstddef>   // 可选，提供 size_t
+
+namespace {
+    minirpc::JsonSerialize& json_serializer_ =
+    minirpc::JsonSerialize::GetInstance();
+    minirpc::ProtobufSerialize& protobuf_serializer_ =
+    minirpc::ProtobufSerialize::GetInstance();
+}
 
 namespace minirpc
 {
@@ -14,47 +23,25 @@ namespace minirpc
 class Serialize
 {
 private:
-    static JsonSerialize json_serializer_;
-    static ProtobufSerialize protobuf_serializer_;
-    static uint8_t seriType_;
-public:
-    static void SetSerializeType(uint8_t seriType) {
-        seriType_ = SERIALIZE_JSON;
-    }
+    // static JsonSerialize json_serializer_;
+    // static ProtobufSerialize protobuf_serializer_;
 
+public:
     template<class T>
     static std::string Serialization(const T& obj) {
-        switch (seriType_)
-        {
-        case SERIALIZE_JSON:
-            return json_serializer_.serialization(obj);
-            break;
-
-        case SERIALIZE_PROTOBUF:
+        if constexpr (std::is_base_of_v<google::protobuf::Message, T>) {
             return protobuf_serializer_.serialization(obj);
-            break;
-        
-        default:
-            throw std::runtime_error("Serializa type " + std::to_string(seriType_) + " Unsupport." );
-            break;
+        } else {
+            return json_serializer_.serialization(obj);
         }
     }
 
     template<class T>
     static T Deserialization(const std::string& data) {
-        switch (seriType_)
-        {
-            case SERIALIZE_JSON:
-                return json_serializer_.deserialization<T>(data);
-                break;
-
-            case SERIALIZE_PROTOBUF:
-                return protobuf_serializer_.deserialization<T>(data);
-                break;
-            
-            default:
-                throw std::runtime_error("Deserialization type " + std::to_string(seriType_) + " Unsupport." );
-                break;
+        if constexpr (std::is_base_of_v<google::protobuf::Message, T>) {
+            return protobuf_serializer_.deserialization<T>(data);;
+        } else {
+            return json_serializer_.deserialization<T>(data);
         }
     }
 };
