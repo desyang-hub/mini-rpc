@@ -29,6 +29,7 @@ Mini-Rpc is a lightweight C++ RPC framework with simple APIs, high-performance a
 ```bash
 sudo apt-get update
 sudo apt-get install -y cmake g++ libgtest-dev libcurl4-openssl-dev zlib1g-dev
+sudo apt install -y protobuf-compiler libprotobuf-dev libprotoc-dev
 ```
 
 ### Build
