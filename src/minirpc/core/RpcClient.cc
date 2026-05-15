@@ -36,17 +36,19 @@ bool RpcClient::send(const Bytes& bytes, const std::string& service_name, const 
     try
     {
         IConnectionPool* pool = connnection_pool_factory_->getConnectionPool(service_name, group_name);
+        if (pool == nullptr) {
+            LOG_ERROR("connection pool not found for service %s@%s", service_name.c_str(), group_name.c_str());
+            return false;
+        }
         IConnectionPtr conn = pool->getConnection();
         conn->send(bytes);
     }
     catch(const std::exception& e)
     {
-        LOG_ERROR("%s", e.what())
-        std::cerr << e.what() << '\n';
+        LOG_ERROR("%s", e.what());
         return false;
     }
     return true;
-
 }
 
 
