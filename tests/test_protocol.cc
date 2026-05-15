@@ -1,73 +1,186 @@
 #include <gtest/gtest.h>
 #include <iostream>
-
+#include <vector>
+#include <string>
 #include "minirpc/protocol/Encoder.h"
 #include "minirpc/protocol/Decoder.h"
+#include "minirpc/protocol/Protocol.h"
+#include "minirpc/common/utils.h"
 
-
-using namespace std;
 using namespace minirpc;
 
-// 假设utils.h中有一些函数或类可以测试
-class UtilsTest : public ::testing::Test {
-protected:
-    void SetUp() override {
-        // 在每个测试之前运行
-        std::cout << "SetUp" << std::endl;
-    }
+// ============================================================
+// Encoder/Decoder 基础测试
+// ============================================================
 
-    void TearDown() override {
-        // 在每个测试之后运行
-        std::cout << "TearDown" << std::endl;
-    }
-};
-
-// 测试示例 - 您需要根据实际的utils.h内容修改
-TEST_F(UtilsTest, TestFunctionName) {
-    // 实际测试代码 - 根据您的utils.h内容调整
-    // int result = your_function();
-    // EXPECT_EQ(result, expected_value);
-    
-    std::string srvNmae = "test";
-    std::string body_str = "body";
-    Bytes encode_bytes = Encoder::Encode(srvNmae, body_str);
-
-    uint8_t crcNum = simple_crc32(reinterpret_cast<const uint8_t*>(body_str.data()), body_str.size());
+TEST(ProtocolTest, EncodeDecodeBasic) {
+    std::string srvName = "TestService.hello";
+    std::string body = "hello body";
+    Bytes encode_bytes = Encoder::Encode(srvName, body);
 
     ProtocolHeader header;
+    std::string decoded_body;
+    std::string decoded_name;
+    bool success = Decoder::Decode(encode_bytes, header, decoded_name, decoded_body);
 
-    std::string body;
-    std::string recv_srv_name;
-    bool is_success = Decoder::Decode(encode_bytes, header, recv_srv_name, body);
-
-    EXPECT_EQ(srvNmae, recv_srv_name);
-    EXPECT_EQ(body_str, body);
+    EXPECT_TRUE(success);
+    EXPECT_EQ(srvName, decoded_name);
+    EXPECT_EQ(body, decoded_body);
 }
 
-// 参数化测试示例
-class ParameterizedTest : public ::testing::TestWithParam<std::pair<int, int>> {
-protected:
-    int input;
-    int expected;
+TEST(ProtocolTest, EncodeDecodeEmptyBody) {
+    std::string srvName = "TestService.empty";
+    std::string body = "";
+    Bytes encode_bytes = Encoder::Encode(srvName, body);
 
-    void SetUp() override {
-        input = GetParam().first;
-        expected = GetParam().second;
-    }
-};
+    ProtocolHeader header;
+    std::string decoded_body;
+    std::string decoded_name;
+    bool success = Decoder::Decode(encode_bytes, header, decoded_name, decoded_body);
 
-INSTANTIATE_TEST_SUITE_P(
-    TestValues,
-    ParameterizedTest,
-    ::testing::Values(
-        std::make_pair(1, 1),
-        std::make_pair(2, 4),
-        std::make_pair(3, 9)
-    )
-);
+    EXPECT_TRUE(success);
+    EXPECT_EQ(srvName, decoded_name);
+    EXPECT_EQ(body, decoded_body);
+}
 
-TEST_P(ParameterizedTest, TestSquare) {
-    // 根据您的实际函数调整
-    // int result = square_function(input);
-    // EXPECT_EQ(result, expected);
+TEST(ProtocolTest, EncodeDecodeLargeBody) {
+    std::string srvName = "TestService.large";
+    std::string body(10240, 'X');  // 10KB
+    Bytes encode_bytes = Encoder::Encode(srvName, body);
+
+    ProtocolHeader header;
+    std::string decoded_body;
+    std::string decoded_name;
+    bool success = Decoder::Decode(encode_bytes, header, decoded_name, decoded_body);
+
+    EXPECT_TRUE(success);
+    EXPECT_EQ(srvName, decoded_name);
+    EXPECT_EQ(body, decoded_body);
+}
+
+TEST(ProtocolTest, EncodeDecodeVeryLargeBody) {
+    std::string srvName = "TestService.veryLarge";
+    std::string body(1024 * 1024, 'A');  // 1MB
+    Bytes encode_bytes = Encoder::Encode(srvName, body);
+
+    ProtocolHeader header;
+    std::string decoded_body;
+    std::string decoded_name;
+    bool success = Decoder::Decode(encode_bytes, header, decoded_name, decoded_body);
+
+    EXPECT_TRUE(success);
+    EXPECT_EQ(srvName, decoded_name);
+    EXPECT_EQ(body, decoded_body);
+}
+
+TEST(ProtocolTest, EncodeDecodeMultiWordBody) {
+    std::string srvName = "TestService.multi";
+    std::string body = "word1 word2 word3 中文测试";
+    Bytes encode_bytes = Encoder::Encode(srvName, body);
+
+    ProtocolHeader header;
+    std::string decoded_body;
+    std::string decoded_name;
+    bool success = Decoder::Decode(encode_bytes, header, decoded_name, decoded_body);
+
+    EXPECT_TRUE(success);
+    EXPECT_EQ(srvName, decoded_name);
+    EXPECT_EQ(body, decoded_body);
+}
+
+TEST(ProtocolTest, DecodeInvalidMagic) {
+    std::string srvName = "TestService.bad";
+    std::string body = "data";
+    Bytes encode_bytes = Encoder::Encode(srvName, body);
+
+    // 破坏魔数
+    encode_bytes[0] = 0x00;
+    encode_bytes[1] = 0x00;
+
+    ProtocolHeader header;
+    std::string decoded_body;
+    std::string decoded_name;
+    int result = Decoder::Decode(encode_bytes, header, decoded_name, decoded_body);
+
+    EXPECT_EQ(result, ERR);
+}
+
+TEST(ProtocolTest, DecodeShortPacket) {
+    // 构造一个只有魔数+1字节的短包
+    std::vector<uint8_t> short_packet(2, 0);
+    // 写入正确魔数
+    short_packet[0] = (MAGIC_NUMBER >> 8) & 0xFF;
+    short_packet[1] = MAGIC_NUMBER & 0xFF;
+
+    ProtocolHeader header;
+    std::string decoded_body;
+    std::string decoded_name;
+    int result = Decoder::Decode(short_packet, header, decoded_name, decoded_body);
+
+    EXPECT_EQ(result, UN_FINISH);
+}
+
+TEST(ProtocolTest, DecodeInvalidCRC) {
+    std::string srvName = "TestService.badCRC";
+    std::string body = "test data";
+    Bytes encode_bytes = Encoder::Encode(srvName, body);
+
+    // 破坏 body 内容（CRC 会不匹配）
+    encode_bytes[encode_bytes.size() - 1] ^= 0xFF;
+
+    ProtocolHeader header;
+    std::string decoded_body;
+    std::string decoded_name;
+    int result = Decoder::Decode(encode_bytes, header, decoded_name, decoded_body);
+
+    EXPECT_EQ(result, ERR);
+}
+
+TEST(ProtocolTest, DecodeCheckValid) {
+    std::string srvName = "TestService.check";
+    std::string body = "body content";
+    Bytes encode_bytes = Encoder::Encode(srvName, body);
+
+    int result = Decoder::Check(encode_bytes);
+    EXPECT_GT(result, 0);  // 返回完整包长度
+}
+
+TEST(ProtocolTest, DecodeCheckInvalid) {
+    std::vector<uint8_t> bad_packet(2, 0);
+    bad_packet[0] = (MAGIC_NUMBER >> 8) & 0xFF;
+    bad_packet[1] = MAGIC_NUMBER & 0xFF;
+
+    int result = Decoder::Check(bad_packet);
+    EXPECT_EQ(result, UN_FINISH);
+}
+
+TEST(ProtocolTest, EncodeDecodeServiceName) {
+    std::string srvName = "com.example.UserService.login";
+    std::string body = "{\"name\":\"test\"}";
+    Bytes encode_bytes = Encoder::Encode(srvName, body);
+
+    ProtocolHeader header;
+    std::string decoded_body;
+    std::string decoded_name;
+    bool success = Decoder::Decode(encode_bytes, header, decoded_name, decoded_body);
+
+    EXPECT_TRUE(success);
+    EXPECT_EQ(srvName, decoded_name);
+    EXPECT_EQ(body, decoded_body);
+}
+
+// ============================================================
+// Encoder 自身测试
+// ============================================================
+
+TEST(EncoderTest, EncodeReturnsValidBytes) {
+    auto bytes = Encoder::Encode("Test", "data");
+    EXPECT_GT(bytes.size(), 0);
+}
+
+TEST(EncoderTest, EncodeContainsMagic) {
+    auto bytes = Encoder::Encode("Test", "data");
+    // 小端序机器上，低字节在前
+    uint16_t magic = static_cast<uint16_t>(bytes[0]) | (static_cast<uint16_t>(bytes[1]) << 8);
+    EXPECT_EQ(magic, MAGIC_NUMBER);
 }

@@ -1,4 +1,5 @@
 #include "RpcConnectionPool.h"
+#include "minirpc/core/RpcClient.h"
 #include "minirpc/core/utils.h"
 #include "minirpc/net/utils.h"
 #include "minirpc/common/logger.h"
@@ -15,7 +16,16 @@ IConnectionPool* IConnectionPool::GetConnectionPool(const std::string& server_na
 
 // 获取连接
 IConnectionPtr RpcConnectionPool::connect() {
-    // 目前只用了server_name
+    // 优先检查本地直连地址（用于本地集成测试，跳过 Nacos）
+    std::string addr = RpcClient::getLocalServiceAddress(server_name_);
+    if (!addr.empty()) {
+        int id = addr.find(':');
+        std::string ip = addr.substr(0, id);
+        std::string port = addr.substr(id + 1);
+        return IConnection::GetConnection(ip, atoi(port.c_str()));
+    }
+
+    // 原有 Nacos 逻辑
     std::string ipAddr = getServiceAddress(server_name_);
 
     LOG_INFO("Service info: %s", ipAddr.c_str());

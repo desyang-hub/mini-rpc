@@ -1,66 +1,96 @@
 #include <gtest/gtest.h>
 #include <iostream>
-#include "minirpc/common/utils.h"  // 假设这是您要测试的头文件
+#include <vector>
+#include <chrono>
+#include <thread>
+#include <atomic>
+#include "minirpc/common/utils.h"
 #include "minirpc/common/logger.h"
+#include "minirpc/common/timeStamp.h"
+#include "minirpc/common/Random.h"
 
-using namespace std;
 using namespace minirpc;
 
-// 假设utils.h中有一些函数或类可以测试
-class UtilsTest : public ::testing::Test {
-protected:
-    void SetUp() override {
-        // 在每个测试之前运行
-        std::cout << "SetUp" << std::endl;
-    }
+// ============================================================
+// CRC32 测试
+// ============================================================
 
-    void TearDown() override {
-        // 在每个测试之后运行
-        std::cout << "TearDown" << std::endl;
-    }
-};
-
-// 测试示例 - 您需要根据实际的utils.h内容修改
-TEST_F(UtilsTest, TestFunctionName) {
-    // 实际测试代码 - 根据您的utils.h内容调整
-    // int result = your_function();
-    // EXPECT_EQ(result, expected_value);
-    std::cout << "Testing" << std::endl;
-    EXPECT_TRUE(true);  // 占位符 - 替换为实际测试
+TEST(CommonTest, CRC32KnownValue) {
+    // CRC32 of empty string should be 0
+    uint32_t crc = simple_crc32(reinterpret_cast<const uint8_t*>(""), 0);
+    EXPECT_EQ(crc, 0);
 }
 
-// 参数化测试示例
-class ParameterizedTest : public ::testing::TestWithParam<std::pair<int, int>> {
-protected:
-    int input;
-    int expected;
-
-    void SetUp() override {
-        input = GetParam().first;
-        expected = GetParam().second;
-    }
-};
-
-INSTANTIATE_TEST_SUITE_P(
-    TestValues,
-    ParameterizedTest,
-    ::testing::Values(
-        std::make_pair(1, 1),
-        std::make_pair(2, 4),
-        std::make_pair(3, 9)
-    )
-);
-
-TEST_P(ParameterizedTest, TestSquare) {
-    // 根据您的实际函数调整
-    // int result = square_function(input);
-    // EXPECT_EQ(result, expected);
+TEST(CommonTest, CRC32NonEmpty) {
+    std::string data = "hello";
+    uint32_t crc = simple_crc32(reinterpret_cast<const uint8_t*>(data.data()), data.size());
+    EXPECT_NE(crc, 0);
 }
 
+TEST(CommonTest, CRC32Deterministic) {
+    std::string data = "test data";
+    uint32_t crc1 = simple_crc32(reinterpret_cast<const uint8_t*>(data.data()), data.size());
+    uint32_t crc2 = simple_crc32(reinterpret_cast<const uint8_t*>(data.data()), data.size());
+    EXPECT_EQ(crc1, crc2);
+}
 
-TEST(LoggerKitTest, TestLogger) {
-    ENABLE_ASYNC_LOGING();
-    LOG_INFO("info log");
-    LOG_DEBUG("debug log");
-    LOG_ERROR("error log");
+TEST(CommonTest, CRC32DifferentData) {
+    std::string data1 = "hello";
+    std::string data2 = "world";
+    uint32_t crc1 = simple_crc32(reinterpret_cast<const uint8_t*>(data1.data()), data1.size());
+    uint32_t crc2 = simple_crc32(reinterpret_cast<const uint8_t*>(data2.data()), data2.size());
+    EXPECT_NE(crc1, crc2);
+}
+
+TEST(CommonTest, CRC32LargeData) {
+    std::vector<uint8_t> data(10240, 0xAB);
+    uint32_t crc = simple_crc32(data.data(), data.size());
+    EXPECT_NE(crc, 0);
+}
+
+// ============================================================
+// TimeStamp 测试
+// ============================================================
+
+TEST(CommonTest, TimestampNow) {
+    TimeStamp ts = TimeStamp::Now();
+    std::string str = ts.toString();
+    EXPECT_FALSE(str.empty());
+    EXPECT_NE(str, "0");
+}
+
+// ============================================================
+// Random 测试
+// ============================================================
+
+TEST(RandomTest, RandInRange) {
+    for (int i = 0; i < 100; ++i) {
+        int val = Random::RandInt(0, 10);
+        EXPECT_GE(val, 0);
+        EXPECT_LT(val, 10);
+    }
+}
+
+TEST(RandomTest, RandIntDeterministicRange) {
+    std::atomic<int> seen[10]{};
+    for (int i = 0; i < 1000; ++i) {
+        int val = Random::RandInt(0, 10);
+        EXPECT_GE(val, 0);
+        EXPECT_LT(val, 10);
+    }
+}
+
+// ============================================================
+// Logger 测试
+// ============================================================
+
+TEST(LoggerTest, LoggerNoCrash) {
+    LOG_INFO("test info %d", 1);
+    LOG_DEBUG("test debug %s", "hello");
+    LOG_ERROR("test error %d", 42);
+}
+
+TEST(LoggerTest, LoggerWithPrintfStyle) {
+    LOG_INFO("format test: %s %d %f", "test", 123, 3.14);
+    LOG_ERROR("error format: %s", "error message");
 }

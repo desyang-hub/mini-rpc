@@ -9,7 +9,32 @@
 
 namespace minirpc
 {
-    
+
+namespace {
+    std::mutex& local_service_address_mutex() {
+        static std::mutex instance;
+        return instance;
+    }
+    std::unordered_map<std::string, std::string>& local_service_addresses() {
+        static std::unordered_map<std::string, std::string> instance;
+        return instance;
+    }
+}
+
+void RpcClient::setLocalServiceAddress(const std::string& service_name, const std::string& address) {
+    std::lock_guard<std::mutex> lock(local_service_address_mutex());
+    local_service_addresses()[service_name] = address;
+}
+
+std::string RpcClient::getLocalServiceAddress(const std::string& service_name) {
+    std::lock_guard<std::mutex> lock(local_service_address_mutex());
+    auto it = local_service_addresses().find(service_name);
+    if (it != local_service_addresses().end()) {
+        return it->second;
+    }
+    return {};
+}
+
 RpcClient::RpcClient()
     : request_id_(0),
     connnection_pool_factory_(IConnectionPoolFactory::CreateConnectionPoolFactory()) {
@@ -21,9 +46,17 @@ RpcClient::RpcClient()
 RpcClient::~RpcClient() {
 }
 
+static std::unique_ptr<RpcClient> s_rpc_client_instance;
+
 RpcClient& RpcClient::GetInstance() {
-    static RpcClient instance;
-    return instance;
+    if (!s_rpc_client_instance) {
+        s_rpc_client_instance = std::make_unique<RpcClient>();
+    }
+    return *s_rpc_client_instance;
+}
+
+void RpcClient::ResetInstance() {
+    s_rpc_client_instance.reset();
 }
 
 /// @brief 发送数据，复用连接池中的连接

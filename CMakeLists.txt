@@ -178,7 +178,7 @@ add_subdirectory(examples)
 
 #start=============== test ===============
 # 测试相关设置
-option(BUILD_TESTS "Build tests" OFF)
+option(BUILD_TESTS "Build tests" ON)
 
 if(BUILD_TESTS)
     enable_testing()

@@ -69,20 +69,25 @@ private:
     // 连接池
     IConnectionPoolFactoryPtr connnection_pool_factory_ = nullptr;
 
-    // 私有构造，只允许单例，仅在第一个Stub创建时初始化
-    RpcClient();
-
     template<class T, class R>
     uint8_t call_impl(const std::string& srvName, T&& arg, R& ret);
 
     template<class T>
     uint8_t call_impl(const std::string& srvName, T&& arg);
-public:    
+public:
+    RpcClient();
     ~RpcClient();
 
     static RpcClient& GetInstance();
 
+    // 本地服务地址映射（跳过 Nacos，用于本地测试）
+    static void setLocalServiceAddress(const std::string& service_name, const std::string& address);
+    static std::string getLocalServiceAddress(const std::string& service_name);
+
     void messageHandler(IConnection* c);
+
+    // 重置单例（用于测试隔离）
+    static void ResetInstance();
 
     bool send(const Bytes& bytes, const std::string& service_name, const std::string &group_name = "DEFAULT_GROUP");
 
