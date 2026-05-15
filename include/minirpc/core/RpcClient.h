@@ -24,6 +24,8 @@
 #include <unordered_map>
 #include <future>
 #include <atomic>
+#include <mutex>
+#include <string>
 #include <sys/epoll.h>
 
 
@@ -125,13 +127,23 @@ inline uint8_t RpcClient::call_impl(const std::string& srvName, T&& arg, R& ret)
         promiseMap_[rid] = std::promise<Response>();
         f = promiseMap_[rid].get_future();
         ++request_id_;
-        if (!send(bytes, name)) return false;
+    }
+    if (!send(bytes, name)) {
+        // send 失败：清理未响应的 promise，防止泄漏
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            promiseMap_.erase(rid);
+        }
+        return false;
     }
 
     // 设置超时返回
     auto status = f.wait_for(std::chrono::seconds(5));
     if (status == std::future_status::timeout) {
-        promiseMap_.erase(rid);
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            promiseMap_.erase(rid);
+        }
         return TIMEOUT; // 定义超时错误码
     }
 
@@ -142,7 +154,7 @@ inline uint8_t RpcClient::call_impl(const std::string& srvName, T&& arg, R& ret)
         ret = Serialize::Deserialization<R>(r.data);
     }
 
-    return r.state;    
+    return r.state;
 }
 
 template<class T>
@@ -164,7 +176,23 @@ inline uint8_t RpcClient::call_impl(const std::string& srvName, T&& arg) {
         promiseMap_[rid] = std::promise<Response>();
         f = promiseMap_[rid].get_future();
         ++request_id_;
-        if (!send(bytes, name)) return false;
+    }
+    if (!send(bytes, name)) {
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            promiseMap_.erase(rid);
+        }
+        return false;
+    }
+
+    // 设置超时返回
+    auto status = f.wait_for(std::chrono::seconds(5));
+    if (status == std::future_status::timeout) {
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            promiseMap_.erase(rid);
+        }
+        return TIMEOUT;
     }
 
     // 阻塞获取结果

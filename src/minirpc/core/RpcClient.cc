@@ -57,13 +57,17 @@ bool RpcClient::send(const Bytes& bytes, const std::string& service_name, const 
  */
 void RpcClient::messageHandler(IConnection* c) {
     IConnection::processConnection(c, [this](ProtocolHeader& header, const std::string& body) {
-        auto it = promiseMap_.find(header.request_id);
-        if (it != promiseMap_.end()) {
-            it->second.set_value({header.code, body});
+        Response resp{header.code, body};
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            auto it = promiseMap_.find(header.request_id);
+            if (it != promiseMap_.end()) {
+                it->second.set_value(resp);
+                promiseMap_.erase(it);
+            }
         }
         return true;
     });
-    c->close();
 }
     
 } // namespace minirpc

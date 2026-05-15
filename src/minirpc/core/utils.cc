@@ -39,7 +39,7 @@ std::string parseFirstInstance(const std::string &jsonStr) {
     
     if (a.size()) {
         int idx = Random::RandInt(0, a.size());
-        return a[0]["ip"].get<std::string>() + ":" + std::to_string(a[0]["port"].get<int>());
+        return a[idx]["ip"].get<std::string>() + ":" + std::to_string(a[idx]["port"].get<int>());
     }
 
     throw std::runtime_error("none any service instance");

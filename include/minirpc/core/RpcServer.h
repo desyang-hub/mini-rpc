@@ -5,6 +5,7 @@
 #include "minirpc/common/logger.h"
 #include "minirpc/common/functioin_traits.h"
 #include "minirpc/common/tuple_helper.h"
+#include "minirpc/common/ThreadPool.h"
 #include "minirpc/protocol/Serialize.h"
 #include "minirpc/protocol/Decoder.h"
 #include "minirpc/protocol/Encoder.h"
@@ -29,6 +30,8 @@ private:
     std::unordered_map<std::string, RpcHandler> handlers_;
 
     std::vector<std::string> services_;
+
+    ThreadPool pool_;
 
     // 辅助函数：处理返回值为 void 的情况
     template <typename F, typename T>
@@ -58,11 +61,11 @@ public:
 
     void registerService(const std::string& className);
 
-    static std::vector<std::string>& GetServices() {
+    static const std::vector<std::string>& GetServices() {
         return GetInstance().getServices();
     }
 
-    std::vector<std::string>& getServices() {
+    const std::vector<std::string>& getServices() const {
         return services_;
     }
 
@@ -139,6 +142,7 @@ public:
 
 
     static bool Call(const std::string &name, const std::string &body, std::string &res) {
+        
         return GetInstance().call(name, body, res);
     }
 

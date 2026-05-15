@@ -12,6 +12,8 @@
 namespace minirpc
 {
 
+constexpr uint32_t MAX_BODY_SIZE = 64 * 1024 * 1024; // 64MB
+
 enum DecodeState : int8_t {
     ERR = -1,
     UN_FINISH = 0,
@@ -38,6 +40,12 @@ public:
         // 3. 校验魔数
         if (headerPtr->magic != MAGIC_NUMBER) {
             std::cerr << "magic check error" << std::endl;
+            return ERR;
+        }
+
+        // 3.5 限制最大包体大小，防止内存溢出
+        if (headerPtr->body_len > MAX_BODY_SIZE) {
+            std::cerr << "body too large: " << headerPtr->body_len << std::endl;
             return ERR;
         }
 
@@ -80,13 +88,19 @@ public:
             return false;
         }
 
+        // 3.5 限制最大包体大小，防止内存溢出
+        if (headerPtr->body_len > MAX_BODY_SIZE) {
+            std::cerr << "body too large: " << headerPtr->body_len << std::endl;
+            return false;
+        }
+
         // 4. body 未完全接入
-        if (raw_data.size() < header_len + header.srv_name_len + header.body_len) {
+        if (raw_data.size() < header_len + headerPtr->srv_name_len + headerPtr->body_len) {
             return false;
         }
 
         // 5. 校验
-        if (simple_crc32(raw_data.data() + header_len, headerPtr->body_len) != headerPtr->checksum) {
+        if (simple_crc32(raw_data.data() + header_len + headerPtr->srv_name_len, headerPtr->body_len) != headerPtr->checksum) {
             std::cerr << "crc32 check faied" << std::endl;
             return false;
         }
@@ -116,6 +130,11 @@ public:
         // 3. 校验魔数
         if (headerPtr->magic != MAGIC_NUMBER) {
             std::cerr << "magic check error" << std::endl;
+            return ERR;
+        }
+
+        // 3.5 限制最大包体大小，防止内存溢出
+        if (headerPtr->body_len > MAX_BODY_SIZE) {
             return ERR;
         }
 

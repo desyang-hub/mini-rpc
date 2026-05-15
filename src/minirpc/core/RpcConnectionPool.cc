@@ -52,10 +52,9 @@ void RpcConnectionPool::addConnectionListener(IConnection* conn) {
     ev.data.ptr = conn;
 
     if (epoll_ctl(epollfd_, EPOLL_CTL_ADD, sockfd, &ev) < 0) {
-        // perror("epoll add sockfd error");
-        close(sockfd);
-        // exit(-1);
-        LOG_ERROR("add sockfd error");
+        LOG_ERROR("add sockfd error, closing connection");
+        conn->close();
+        // 通知 caller 连接创建失败
     }
 }
 
@@ -103,6 +102,15 @@ RpcConnectionPool::~RpcConnectionPool() {
     if (loop_thread_.joinable()) {
         loop_thread_.join();
     }
+    // 清理池内剩余连接，避免 socket fd 泄漏
+    std::lock_guard<std::mutex> lock(mutex_);
+    while (!connection_que_.empty()) {
+        IConnectionPtr conn = std::move(connection_que_.front());
+        connection_que_.pop();
+        if (conn) {
+            conn->close();
+        }
+    }
 }
 
 
@@ -132,6 +140,11 @@ IConnectionPtr RpcConnectionPool::getConnection() {
         conPtr = connect();
         // 将创建的连接添加到消息监听
         addConnectionListener(conPtr.get());
+        // 如果连接已失效（如 epoll 注册失败），直接丢弃
+        if (!conPtr->isHealthy()) {
+            LOG_ERROR("Connection failed after listener registration");
+            return getConnection(); // 递归重试
+        }
     }
 
     // 设置该连接依附的池，用于当连接销毁时，自动回到连接池中
@@ -140,10 +153,17 @@ IConnectionPtr RpcConnectionPool::getConnection() {
     return conPtr;
 }
 
-// 归还连接：放回池中（不关闭）
+// 归还连接：放回池中（不关闭），无效连接直接丢弃
 void RpcConnectionPool::returnConnection(IConnection* conn) {
     std::lock_guard<std::mutex> lock(mutex_);
-    connection_que_.emplace(conn);
+    if (conn && conn->isHealthy()) {
+        connection_que_.emplace(conn);
+    } else {
+        // 无效连接直接关闭，不放回池中
+        if (conn) {
+            conn->close();
+        }
+    }
 }
 
     

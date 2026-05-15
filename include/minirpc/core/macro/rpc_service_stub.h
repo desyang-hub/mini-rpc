@@ -32,6 +32,7 @@
         static_assert(sizeof...(Args) == arity_##Method, "Argument count mismatch for method " #Method); \
         \
         /* 类型兼容性检查 */ \
+        static_assert(std::is_convertible_v<std::tuple<std::decay_t<Args>...>, ArgsTuple_##Method>, "Parameter types mismatch for method " #Method); \
         \
         std::string srvName = #Class "." #Method; \
         auto& client = minirpc::RpcClient::GetInstance(); \
