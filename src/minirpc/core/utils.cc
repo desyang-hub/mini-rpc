@@ -29,20 +29,31 @@ using json = nlohmann::json;
 // 简易解析（不依赖 JSON 库）
 std::string parseFirstInstance(const std::string &jsonStr) {
 
-
-    // LOG_INFO("jsonStr: %s", jsonStr.c_str());
-
-    json a = json::parse(jsonStr);
-    a = a["hosts"];
-
-    assert(a.size() && "Valid service instance is empty.");
-    
-    if (a.size()) {
-        int idx = Random::RandInt(0, a.size());
-        return a[0]["ip"].get<std::string>() + ":" + std::to_string(a[0]["port"].get<int>());
+    if (jsonStr.empty()) {
+        throw std::runtime_error("empty response from nacos service registry");
     }
 
-    throw std::runtime_error("none any service instance");
+    json j;
+    try {
+        j = json::parse(jsonStr);
+    } catch (const json::parse_error&) {
+        throw std::runtime_error("failed to parse nacos response as JSON: " + jsonStr);
+    }
+
+    auto hosts = j.find("hosts");
+    if (hosts == j.end() || !hosts->is_array() || hosts->empty()) {
+        throw std::runtime_error("no service instances found (nacos may not have this service registered)");
+    }
+
+    const auto &a = *hosts;
+    int idx = Random::RandInt(0, static_cast<int>(a.size()));
+    const auto &instance = a[idx];
+
+    if (!instance.contains("ip") || !instance.contains("port")) {
+        throw std::runtime_error("invalid service instance: missing ip or port field");
+    }
+
+    return instance["ip"].get<std::string>() + ":" + std::to_string(instance["port"].get<int>());
 }
 
 
@@ -54,6 +65,8 @@ std::string getServiceAddress(const std::string& srvName) {
         curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
         curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteCallback);
         curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);
+        curl_easy_setopt(curl, CURLOPT_TIMEOUT, 2L);
+        curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 1L);
         curl_easy_perform(curl);
         curl_easy_cleanup(curl);
     }

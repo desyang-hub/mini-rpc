@@ -211,7 +211,7 @@ int RpcConnection::fd() const {
 }
 
 bool RpcConnection::pool_process(IConnection* conn) {
-    if (master_pool_) {
+    if (master_pool_ && isHealthy()) {
         master_pool_->returnConnection(conn);
         master_pool_ = nullptr;
         return true;

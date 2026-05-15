@@ -24,6 +24,9 @@
 #include <unordered_map>
 #include <future>
 #include <atomic>
+#include <mutex>
+#include <memory>
+#include <string>
 #include <sys/epoll.h>
 
 
@@ -66,20 +69,25 @@ private:
     // 连接池
     IConnectionPoolFactoryPtr connnection_pool_factory_ = nullptr;
 
-    // 私有构造，只允许单例，仅在第一个Stub创建时初始化
-    RpcClient();
-
     template<class T, class R>
     uint8_t call_impl(const std::string& srvName, T&& arg, R& ret);
 
     template<class T>
     uint8_t call_impl(const std::string& srvName, T&& arg);
-public:    
+public:
+    RpcClient();
     ~RpcClient();
 
     static RpcClient& GetInstance();
 
+    // 本地服务地址映射（跳过 Nacos，用于本地测试）
+    static void setLocalServiceAddress(const std::string& service_name, const std::string& address);
+    static std::string getLocalServiceAddress(const std::string& service_name);
+
     void messageHandler(IConnection* c);
+
+    // 重置单例（用于测试隔离）
+    static void ResetInstance();
 
     bool send(const Bytes& bytes, const std::string& service_name, const std::string &group_name = "DEFAULT_GROUP");
 
@@ -125,13 +133,23 @@ inline uint8_t RpcClient::call_impl(const std::string& srvName, T&& arg, R& ret)
         promiseMap_[rid] = std::promise<Response>();
         f = promiseMap_[rid].get_future();
         ++request_id_;
-        if (!send(bytes, name)) return false;
+    }
+    if (!send(bytes, name)) {
+        // send 失败：清理未响应的 promise，防止泄漏
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            promiseMap_.erase(rid);
+        }
+        return false;
     }
 
     // 设置超时返回
     auto status = f.wait_for(std::chrono::seconds(5));
     if (status == std::future_status::timeout) {
-        promiseMap_.erase(rid);
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            promiseMap_.erase(rid);
+        }
         return TIMEOUT; // 定义超时错误码
     }
 
@@ -142,7 +160,7 @@ inline uint8_t RpcClient::call_impl(const std::string& srvName, T&& arg, R& ret)
         ret = Serialize::Deserialization<R>(r.data);
     }
 
-    return r.state;    
+    return r.state;
 }
 
 template<class T>
@@ -164,7 +182,23 @@ inline uint8_t RpcClient::call_impl(const std::string& srvName, T&& arg) {
         promiseMap_[rid] = std::promise<Response>();
         f = promiseMap_[rid].get_future();
         ++request_id_;
-        if (!send(bytes, name)) return false;
+    }
+    if (!send(bytes, name)) {
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            promiseMap_.erase(rid);
+        }
+        return false;
+    }
+
+    // 设置超时返回
+    auto status = f.wait_for(std::chrono::seconds(5));
+    if (status == std::future_status::timeout) {
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            promiseMap_.erase(rid);
+        }
+        return TIMEOUT;
     }
 
     // 阻塞获取结果
@@ -194,40 +228,39 @@ inline bool RpcClient::call(const std::string& srvName, Arg&& arg) {
 }
 
 
-template<class T, typename ...Args> 
+template<class T, typename ...Args>
 inline std::future<T> RpcClient::async_call(const std::string& srvName, const std::tuple<Args...>& args) {
-    // set{bool, promise}
-    std::future<T> f = std::async(std::launch::async, [srvName, args](){
-        // 判断类型是不是空
-        bool is_success;
+    // 使用 promise/future 确保 future 在任务完成后才可 get
+    auto prom = std::make_shared<std::promise<T>>();
+    auto f = prom->get_future();
+
+    thread_pool_.enqueue([prom, srvName, args]() {
         if constexpr (std::is_void_v<T>) {
-            is_success = call(srvName, args);
-            return;
-        }
-        else {
+            call(srvName, args);
+            prom->set_value();
+        } else {
             T res;
-            is_success = call(srvName, args, res);
-            return res;
+            call(srvName, args, res);
+            prom->set_value(std::move(res));
         }
     });
 
     return f;
 }
 
-template<class T, typename Arg> 
+template<class T, typename Arg>
 inline std::future<T> RpcClient::async_call(const std::string& srvName, Arg&& arg) {
-    // set{bool, promise}
-    std::future<T> f = std::async(std::launch::async, [srvName, arg](){
-        // 判断类型是不是空
-        bool is_success;
+    auto prom = std::make_shared<std::promise<T>>();
+    auto f = prom->get_future();
+
+    thread_pool_.enqueue([prom, srvName, arg]() {
         if constexpr (std::is_void_v<T>) {
-            is_success = call(srvName, arg);
-            return;
-        }
-        else {
+            call(srvName, arg);
+            prom->set_value();
+        } else {
             T res;
-            is_success = call(srvName, arg, res);
-            return res;
+            call(srvName, arg, res);
+            prom->set_value(std::move(res));
         }
     });
 

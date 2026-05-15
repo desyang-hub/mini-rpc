@@ -5,6 +5,7 @@ dependense/
 build/
 build-test/
 build-release/
+build-db/
 
 bin/
 lib/

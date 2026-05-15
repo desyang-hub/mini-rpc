@@ -1,4 +1,5 @@
 #include "RpcConnectionPool.h"
+#include "minirpc/core/RpcClient.h"
 #include "minirpc/core/utils.h"
 #include "minirpc/net/utils.h"
 #include "minirpc/common/logger.h"
@@ -15,7 +16,16 @@ IConnectionPool* IConnectionPool::GetConnectionPool(const std::string& server_na
 
 // 获取连接
 IConnectionPtr RpcConnectionPool::connect() {
-    // 目前只用了server_name
+    // 优先检查本地直连地址（用于本地集成测试，跳过 Nacos）
+    std::string addr = RpcClient::getLocalServiceAddress(server_name_);
+    if (!addr.empty()) {
+        int id = addr.find(':');
+        std::string ip = addr.substr(0, id);
+        std::string port = addr.substr(id + 1);
+        return IConnection::GetConnection(ip, atoi(port.c_str()));
+    }
+
+    // 原有 Nacos 逻辑
     std::string ipAddr = getServiceAddress(server_name_);
 
     LOG_INFO("Service info: %s", ipAddr.c_str());
@@ -52,10 +62,9 @@ void RpcConnectionPool::addConnectionListener(IConnection* conn) {
     ev.data.ptr = conn;
 
     if (epoll_ctl(epollfd_, EPOLL_CTL_ADD, sockfd, &ev) < 0) {
-        // perror("epoll add sockfd error");
-        close(sockfd);
-        // exit(-1);
-        LOG_ERROR("add sockfd error");
+        LOG_ERROR("add sockfd error, closing connection");
+        conn->close();
+        // 通知 caller 连接创建失败
     }
 }
 
@@ -77,6 +86,12 @@ void RpcConnectionPool::loop() {
 
         for (int i = 0; i < numEvents; ++i) {
             IConnection* c = static_cast<IConnection*>(events[i].data.ptr);
+
+            // 分发消息前校验连接健康，失效连接跳过避免空指针访问
+            if (!c->isHealthy()) {
+                LOG_DEBUG("Skipping event on unhealthy connection");
+                continue;
+            }
 
             if (message_handler_) {
                 threadPool_.enqueue(message_handler_, c);
@@ -102,6 +117,15 @@ RpcConnectionPool::~RpcConnectionPool() {
     pool_running_ = false;
     if (loop_thread_.joinable()) {
         loop_thread_.join();
+    }
+    // 清理池内剩余连接，避免 socket fd 泄漏
+    std::lock_guard<std::mutex> lock(mutex_);
+    while (!connection_que_.empty()) {
+        IConnectionPtr conn = std::move(connection_que_.front());
+        connection_que_.pop();
+        if (conn) {
+            conn->close();
+        }
     }
 }
 
@@ -132,6 +156,11 @@ IConnectionPtr RpcConnectionPool::getConnection() {
         conPtr = connect();
         // 将创建的连接添加到消息监听
         addConnectionListener(conPtr.get());
+        // 如果连接已失效（如 epoll 注册失败），直接丢弃
+        if (!conPtr->isHealthy()) {
+            LOG_ERROR("Connection failed after listener registration");
+            return getConnection(); // 递归重试
+        }
     }
 
     // 设置该连接依附的池，用于当连接销毁时，自动回到连接池中
@@ -140,10 +169,17 @@ IConnectionPtr RpcConnectionPool::getConnection() {
     return conPtr;
 }
 
-// 归还连接：放回池中（不关闭）
+// 归还连接：放回池中（不关闭），无效连接直接丢弃
 void RpcConnectionPool::returnConnection(IConnection* conn) {
     std::lock_guard<std::mutex> lock(mutex_);
-    connection_que_.emplace(conn);
+    if (conn && conn->isHealthy()) {
+        connection_que_.emplace(conn);
+    } else {
+        // 无效连接直接关闭，不放回池中
+        if (conn) {
+            conn->close();
+        }
+    }
 }
 
     

@@ -1,5 +1,7 @@
 #include "TcpConnectionPoolFactory.h"
 
+#include "minirpc/common/logger.h"
+
 #include <mutex>
 
 
@@ -22,18 +24,25 @@ IConnectionPool* TcpConnectionPoolFactory::getConnectionPool(const std::string& 
             ptr = it->second.get();
         }
     }
-    
+
     // 如果池已经建立了，那么直接返回
     if (ptr) return ptr;
 
     // 否则获取池，将池放到factory管理，并返回ptr
-    ptr = IConnectionPool::GetConnectionPool(server_name, group_name);
-    if (message_handler_) {
-        ptr->setMessageHandler(message_handler_);
-    }
-    {
-        std::unique_lock<std::shared_mutex> lock(sd_mutex_);
-        connection_pools_[key] = std::unique_ptr<IConnectionPool>(ptr);
+    try {
+        auto pool = std::unique_ptr<IConnectionPool>(
+            static_cast<IConnectionPool*>(IConnectionPool::GetConnectionPool(server_name, group_name)));
+        if (message_handler_) {
+            pool->setMessageHandler(message_handler_);
+        }
+        {
+            std::unique_lock<std::shared_mutex> lock(sd_mutex_);
+            connection_pools_[key] = std::move(pool);
+            ptr = connection_pools_[key].get();
+        }
+    } catch (const std::exception& e) {
+        LOG_ERROR("failed to create connection pool for %s: %s", server_name.c_str(), e.what());
+        return nullptr;
     }
     return ptr;
 }
