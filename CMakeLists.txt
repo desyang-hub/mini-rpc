@@ -187,22 +187,17 @@ option(BUILD_TESTS "Build tests" ON)
 
 if(BUILD_TESTS)
     enable_testing()
-    
-    # 查找Google Test
-    find_package(GTest REQUIRED)
-    
-    # 或者从源码构建Google Test（推荐方式）
-    # include(FetchContent)
-    # FetchContent_Declare(
-    #     googletest
-    #     URL https://github.com/google/googletest/archive/03597a01ee50ed33e9fd7188aa8c3dfb7f2ff3b6.zip
-    # )
-    # # For Windows: Prevent overriding the parent project's compiler/linker settings
-    # set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
-    # FetchContent_MakeAvailable(googletest)
 
+    # 通过 FetchContent 获取 GTest（跨平台，CI 无需手动安装）
+    include(FetchContent)
+    FetchContent_Declare(
+        googletest
+        GIT_REPOSITORY https://github.com/google/googletest.git
+        GIT_TAG        v1.14.0
+    )
+    set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+    FetchContent_MakeAvailable(googletest)
 
-    # 添加测试子目录
     add_subdirectory(tests)
 endif()
 #end =============== test ===============

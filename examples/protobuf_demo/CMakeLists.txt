@@ -3,7 +3,7 @@ project(protobuf_demo C CXX)
 
 # === 1. 自动查找 output 目录（包含 include/ 和 lib/）===
 execute_process(
-    COMMAND bash -c "find ${PROJECT_SOURCE_DIR}/../.. -type d -regex \".*output/include$\" | head -n1 | xargs dirname"
+    COMMAND bash -c "find ${PROJECT_SOURCE_DIR}/../.. -type d -regex '.*output/include\$' | head -n1 | xargs -r dirname"
     OUTPUT_VARIABLE OUTPUT_PATH
     OUTPUT_STRIP_TRAILING_WHITESPACE
 )
