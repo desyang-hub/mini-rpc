@@ -25,6 +25,7 @@
 #include <future>
 #include <atomic>
 #include <mutex>
+#include <memory>
 #include <string>
 #include <sys/epoll.h>
 
@@ -222,40 +223,39 @@ inline bool RpcClient::call(const std::string& srvName, Arg&& arg) {
 }
 
 
-template<class T, typename ...Args> 
+template<class T, typename ...Args>
 inline std::future<T> RpcClient::async_call(const std::string& srvName, const std::tuple<Args...>& args) {
-    // set{bool, promise}
-    std::future<T> f = std::async(std::launch::async, [srvName, args](){
-        // 判断类型是不是空
-        bool is_success;
+    // 使用 promise/future 确保 future 在任务完成后才可 get
+    auto prom = std::make_shared<std::promise<T>>();
+    auto f = prom->get_future();
+
+    thread_pool_.enqueue([prom, srvName, args]() {
         if constexpr (std::is_void_v<T>) {
-            is_success = call(srvName, args);
-            return;
-        }
-        else {
+            call(srvName, args);
+            prom->set_value();
+        } else {
             T res;
-            is_success = call(srvName, args, res);
-            return res;
+            call(srvName, args, res);
+            prom->set_value(std::move(res));
         }
     });
 
     return f;
 }
 
-template<class T, typename Arg> 
+template<class T, typename Arg>
 inline std::future<T> RpcClient::async_call(const std::string& srvName, Arg&& arg) {
-    // set{bool, promise}
-    std::future<T> f = std::async(std::launch::async, [srvName, arg](){
-        // 判断类型是不是空
-        bool is_success;
+    auto prom = std::make_shared<std::promise<T>>();
+    auto f = prom->get_future();
+
+    thread_pool_.enqueue([prom, srvName, arg]() {
         if constexpr (std::is_void_v<T>) {
-            is_success = call(srvName, arg);
-            return;
-        }
-        else {
+            call(srvName, arg);
+            prom->set_value();
+        } else {
             T res;
-            is_success = call(srvName, arg, res);
-            return res;
+            call(srvName, arg, res);
+            prom->set_value(std::move(res));
         }
     });
 

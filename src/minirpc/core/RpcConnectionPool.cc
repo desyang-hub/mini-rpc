@@ -77,6 +77,12 @@ void RpcConnectionPool::loop() {
         for (int i = 0; i < numEvents; ++i) {
             IConnection* c = static_cast<IConnection*>(events[i].data.ptr);
 
+            // 分发消息前校验连接健康，失效连接跳过避免空指针访问
+            if (!c->isHealthy()) {
+                LOG_DEBUG("Skipping event on unhealthy connection");
+                continue;
+            }
+
             if (message_handler_) {
                 threadPool_.enqueue(message_handler_, c);
             }
