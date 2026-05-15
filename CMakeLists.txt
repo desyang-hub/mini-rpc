@@ -37,6 +37,11 @@ FetchContent_Declare(
     nacos_cpp
     GIT_REPOSITORY https://github.com/desyang-hub/nacos-sdk-cpp.git
     GIT_TAG        v1.1.2  # 推荐使用较新稳定版，支持 CMake
+    # 修复 upstream: CMAKE_SOURCE_DIR → CMAKE_CURRENT_SOURCE_DIR
+    # 当 FetchContent 把 nacos_cpp 作为子目录引入时，CMAKE_SOURCE_DIR 指向顶层项目目录
+    # 导致 install(DIRECTORY ${CMAKE_SOURCE_DIR}/include/ DESTINATION include/nacos ...)
+    # 错误地把主项目的头文件安装到 include/nacos/ 下（含 minirpc/ 子目录）
+    PATCH_COMMAND    /usr/bin/sed -i "s/CMAKE_SOURCE_DIR/CMAKE_CURRENT_SOURCE_DIR/g" ${CMAKE_CURRENT_BINARY_DIR}/_deps/nacos_cpp-src/CMakeLists.txt
 )
 FetchContent_MakeAvailable(nacos_cpp)
 
