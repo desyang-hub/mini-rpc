@@ -1,14 +1,16 @@
 #include "minirpc/common/utils.h"
 
 #include <memory>
-#include <assert.h>
+#include <stdexcept>
 
 namespace minirpc
 {
 
 uint32_t simple_crc32(const uint8_t *data, size_t len)
 {
-    assert(data != nullptr && "simple_crc32 input data is nullptr");
+    if (data == nullptr) {
+        throw std::invalid_argument("simple_crc32 input data is nullptr");
+    }
     
     // 只会被初始化一次
     static std::unique_ptr<uint32_t[]> crc32_table([]() {

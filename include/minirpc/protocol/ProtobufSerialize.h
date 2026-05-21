@@ -1,6 +1,5 @@
 #pragma once
 
-#include <iostream>
 #include <google/protobuf/message.h>
 #include <minirpc/common/logger.h>
 

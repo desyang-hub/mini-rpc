@@ -31,43 +31,6 @@
         10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0
 
 // 2. 单个方法的注册逻辑
-// #define _RPC_BIND_METHOD(Class, Method) \
-//     do { \
-//         auto instance = Class::GetInstance(); \
-//         using MethodType = decltype(&Class::Method); \
-//         using param_type = typename function_traits<MethodType>::param_type; \
-//         using PureParamType = typename std::remove_reference<typename std::remove_const<param_type>::type>::type; \
-//         RpcServer::bind(#Class "." #Method, [&instance](param_type param) { \
-//             return instance.Method(param); \
-//         }); \
-//     } while(0)
-
-// #define _RPC_BIND_METHOD(Class, Method) \
-//     do { \
-//         auto& instance = Class::GetInstance(); \
-//         auto instancePtr = &instance; \
-//         using MethodType = decltype(&Class::Method); \
-//         using param_tuple = typename function_traits<MethodType>::args_tuple; \
-//         using return_type = typename function_traits<MethodType>::return_type; \
-//         \
-//         RpcServer::bind(#Class "." #Method, [instancePtr](const param_tuple& received_tuple) { \
-//             if constexpr (std::is_void_v<return_type>) { \
-//                 /* 如果是 void，直接调用，不 return */ \
-//                 std::apply([instancePtr](auto&&... args) { \
-//                     instancePtr->Method(std::forward<decltype(args)>(args)...); \
-//                 }, received_tuple); \
-//             } else { \
-//                 /* 如果有返回值，return 结果 */ \
-//                 return std::apply([instancePtr](auto&&... args) { \
-//                     return instancePtr->Method(std::forward<decltype(args)>(args)...); \
-//                 }, received_tuple); \
-//             } \
-//         }); \
-//     } while(0)
-
-// #define _RPC_BIND_METHOD(Class, Method)         \
-    // 宏只负责提取类型并调用模板函数
-
 #define _RPC_BIND_METHOD(Class, Method) \
 do { \
     minirpc::bind_rpc_method_impl<Class>(#Class "." #Method, &Class::Method); \

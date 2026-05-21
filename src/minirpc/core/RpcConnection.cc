@@ -154,49 +154,12 @@ void RpcConnection::send(const Bytes& data) {
 }
 
 int RpcConnection::readMsg() {
-    int errno_code;
-    int byteNum = buf_.read_fd(sock_, &errno_code);
-
-    // 读数据
-    if (byteNum <= 0) {
-        if (byteNum == 0) {
-            // 正常断开
-            return -1;
-        }
-
-        // 读完了，等待下一次触发
-        if (errno_code == EAGAIN || errno_code == EWOULDBLOCK) {
-            return 0;
-        }
-
-        // 发生了异常
-        // perror("read error");
-        LOG_ERROR("read error %s", strerror(errno_code));
-        return -1;
-    }
-
-    // 还没有计算head 判断包头是否存在
-    if (pkg_len_ == -1 && buf_.readable_bytes() >= sizeof(ProtocolHeader)) {
-        buf_.peek_data(&header_, sizeof(header_));
-        pkg_len_ = header_.body_len + header_.srv_name_len + sizeof(header_);
-    }
-
-    return byteNum;
+    return buf_conn_.readMsg(sock_);
 }
 
 
 bool RpcConnection::decode(ProtocolHeader& header, std::string& body) {
-    if (pkg_len_ == -1 || buf_.readable_bytes() < pkg_len_) return false;
-        
-    std::vector<uint8_t> bytes(pkg_len_);
-    
-    buf_.get_package_data(bytes.data(), pkg_len_);
-
-    bool is_success = Decoder::Decode(bytes, header, body);
-    // 标记为-1
-    pkg_len_ = -1;
-
-    return is_success;
+    return buf_conn_.decode(header, body);
 }
 
 bool RpcConnection::isHealthy() const {

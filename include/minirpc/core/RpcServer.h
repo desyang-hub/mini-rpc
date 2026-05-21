@@ -3,7 +3,7 @@
 
 #include "minirpc/common/Type.h"
 #include "minirpc/common/logger.h"
-#include "minirpc/common/functioin_traits.h"
+#include "minirpc/common/function_traits.h"
 #include "minirpc/common/tuple_helper.h"
 #include "minirpc/common/ThreadPool.h"
 #include "minirpc/protocol/Serialize.h"
@@ -12,10 +12,9 @@
 #include "minirpc/core/macro/rpc_service_bind.h"
 
 
-#include <iostream>
 #include <unordered_map>
 #include <utility>
-#include <assert.h>
+#include <cassert>
 #include <stdexcept>
 #include <shared_mutex>
 
@@ -78,66 +77,32 @@ public:
     template <class Func>
     void bind(const std::string &name, Func &&fun)
     {
-
-
         using DecayFunc = typename std::decay<Func>::type;
-
-        // 判断参数个数是否是一个
         using return_type = typename function_traits<DecayFunc>::return_type;
 
         if constexpr (function_traits<DecayFunc>::is_single_arg) {
             using param_type = typename function_traits<DecayFunc>::first_arg;
-            // 去除引用
             using T = typename std::decay<param_type>::type;
-    
-            
-            using R = typename std::remove_reference<return_type>::type;
-    
-    
-            // 使用写锁
+
             std::unique_lock<std::shared_mutex> lock(handlers_mutex_);
-    
-            // std::cout << handlers_.size() << std::endl;
-    
-            // 确保注册的名称是不一样的，为了确保多重不一致，可以选择将域也作为名称前缀
-            // assert(handlers_.count(name) == 0 && "RpcServer name ambiguity.");
-    
             handlers_[name] = [f = std::forward<Func>(fun)](const std::string &body, std::string &res)
             {
-                // 反序列化
                 auto param = Serialize::Deserialization<T>(body);
-    
                 call_and_serialize(f, param, res);
             };
-    
-            LOG_INFO("RpcServer bind %s", name.c_str());
         } else {
             using param_type = typename function_traits<DecayFunc>::args_tuple;
-            // 去除引用
             using T = typename std::decay<param_type>::type;
-    
-            
-            using R = typename std::remove_reference<return_type>::type;
-    
-    
-            // 使用写锁
+
             std::unique_lock<std::shared_mutex> lock(handlers_mutex_);
-    
-            // std::cout << handlers_.size() << std::endl;
-    
-            // 确保注册的名称是不一样的，为了确保多重不一致，可以选择将域也作为名称前缀
-            // assert(handlers_.count(name) == 0 && "RpcServer name ambiguity.");
-    
             handlers_[name] = [f = std::forward<Func>(fun)](const std::string &body, std::string &res)
             {
-                // 反序列化
                 auto param = Serialize::Deserialization<T>(body);
-    
                 call_and_serialize(f, param, res);
             };
-    
-            LOG_INFO("RpcServer bind %s", name.c_str());
         }
+
+        LOG_INFO("RpcServer bind %s", name.c_str());
     }
 
 

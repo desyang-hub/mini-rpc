@@ -35,7 +35,7 @@ RPC_SERVICE_REGISTER(TestService);
 int main(int argc, char const *argv[])
 {
 
-    // Logger::GetInstanse().setLevel(DEBUG);
+    // Logger::GetInstance().setLevel(DEBUG);
     // // ENABLE_ASYNC_LOGING();
 
     // // 获取服务

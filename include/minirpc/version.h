@@ -1,8 +1,8 @@
 #pragma once
 
-#define MINIRPC_VER_MAJOR 1
-#define MINIRPC_VER_MINOR 5
-#define MINIRPC_VER_PATCH 5
+#define MINIRPC_VER_MAJOR 2
+#define MINIRPC_VER_MINOR 0
+#define MINIRPC_VER_PATCH 0
 
-#define MINIRPC_TO_VERSION(major, minor, patch) major * 10000 + minor * 100 + patch
+#define MINIRPC_TO_VERSION(major, minor, patch) (major) * 10000 + (minor) * 100 + (patch)
 #define MINIRPC_VERSION MINIRPC_TO_VERSION(MINIRPC_VER_MAJOR, MINIRPC_VER_MINOR, MINIRPC_VER_PATCH)

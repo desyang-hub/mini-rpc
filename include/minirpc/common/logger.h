@@ -16,43 +16,45 @@
 #include <atomic>
 #include <fstream>
 #include <thread>
+#include <stdexcept>
 #include <unistd.h>
-#include <string.h>
+#include <cstring>
 
 // 开启异步日志写入
 #define ENABLE_ASYNC_LOGING() \
-minirpc::Logger::GetInstanse().enable_async_log_write()
+minirpc::Logger::GetInstance().enable_async_log_write()
 
 #define LOG_INFO(format, ...) \
-    if (minirpc::Logger::GetInstanse().getLevel() >= minirpc::INFO) {                                    \
+    if (minirpc::Logger::GetInstance().getLevel() >= minirpc::INFO) {                                    \
         char buf[1024];                     \
         snprintf(buf, 1024, format, ##__VA_ARGS__);\
-        minirpc::Logger::GetInstanse().log(buf, minirpc::INFO);     \
+        minirpc::Logger::GetInstance().log(buf, minirpc::INFO);     \
     };                             \
 
 
 #define LOG_ERROR(format, ...) \
-if (minirpc::Logger::GetInstanse().getLevel() >= minirpc::ERROR) {                                    \
+if (minirpc::Logger::GetInstance().getLevel() >= minirpc::ERROR) {                                    \
         char buf[1024];                     \
         snprintf(buf, 1024, format, ##__VA_ARGS__);\
-        minirpc::Logger::GetInstanse().log(buf, minirpc::ERROR);     \
+        minirpc::Logger::GetInstance().log(buf, minirpc::ERROR);     \
     }; 
 
 #define LOG_FATAL(format, ...) \
 if (true) {                                    \
         char buf[1024];                     \
         snprintf(buf, 1024, "%s:%d %s ", __FILE__, __LINE__, __FUNCTION__); \
-        snprintf(buf + strlen(buf), 1024, format, ##__VA_ARGS__);\
-        minirpc::Logger::GetInstanse().log(buf, minirpc::FATAL);     \
-    }; exit(-1);
+        snprintf(buf + strlen(buf), 1024, format, ##__VA_ARGS__); \
+        minirpc::Logger::GetInstance().log(buf, minirpc::FATAL);     \
+        throw std::runtime_error(buf); \
+    }
 
 
 // 为了避免debug输出太多信息
 #define LOG_DEBUG(format, ...) \
-if (minirpc::Logger::GetInstanse().getLevel() >= minirpc::DEBUG) {                                    \
+if (minirpc::Logger::GetInstance().getLevel() >= minirpc::DEBUG) {                                    \
         char buf[1024];                     \
         snprintf(buf, 1024, format, ##__VA_ARGS__);\
-        minirpc::Logger::GetInstanse().log(buf, minirpc::DEBUG);     \
+        minirpc::Logger::GetInstance().log(buf, minirpc::DEBUG);     \
     }; 
 
 
@@ -82,7 +84,7 @@ private:
 public:
     ~Logger();
 
-    static Logger& GetInstanse();
+    static Logger& GetInstance();
 
     // 开启异步线程
     void enable_async_log_write();

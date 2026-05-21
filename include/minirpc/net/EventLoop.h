@@ -4,29 +4,37 @@
 #include "minirpc/net/Poller.h"
 
 #include <memory>
+#include <atomic>
+#include <mutex>
+#include <vector>
 
 
 namespace minirpc
 {
-    
-
 
 class EventLoop : public nonecopyable
 {
 private:
     std::unique_ptr<Poller> poller_;
-    ChannelList channels_;
+    ChannelList activeChannels_;
+    std::atomic<bool> quit_{false};
+
+    // Deferred channel deletions from worker threads
+    std::mutex deferredMutex_;
+    std::vector<Channel*> deferredDelete_;
+
 public:
     EventLoop();
     ~EventLoop() = default;
 
+    void loop();
+    void quit();
 
-public:
     void removeChannel(Channel* ch);
     void updateChannel(Channel* ch);
 
-    void loop(); // 循环
+    // Thread-safe: schedule channel for deletion after current dispatch
+    void deferredDelete(Channel* ch);
 };
-
 
 } // namespace minirpc

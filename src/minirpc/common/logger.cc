@@ -8,7 +8,7 @@
 namespace minirpc
 {
 
-Logger& Logger::GetInstanse() {
+Logger& Logger::GetInstance() {
     static Logger logger;
     return logger;
 }
@@ -17,8 +17,7 @@ void Logger::enable_async_log_write() {
     is_async_ = true;
     log_file_ = std::fopen("app.log", "a");
     if (log_file_ == nullptr) {
-        perror("fopen error");
-        exit(-1);
+        throw std::runtime_error("Failed to open log file: app.log");
     }
     blocked_que_ = std::make_unique<BlockedQueue<std::string>>();
     async_log_write_thread_ = std::thread(&Logger::async_log_write, this);

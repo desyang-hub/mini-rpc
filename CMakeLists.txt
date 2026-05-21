@@ -8,7 +8,7 @@ project(minirpc VERSION ${MINIRPC_VERSION})
 message(STATUS "Build minirpc: ${MINIRPC_VERSION}")
 
 # setting luchange standerd
-set(CMAKE_CXX_STANDARD 17) # equal -std=c++14
+set(CMAKE_CXX_STANDARD 17) # equal -std=c++17
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # set output save path
@@ -54,7 +54,7 @@ add_library(common STATIC
     src/minirpc/common/logger.cc
     src/minirpc/common/timeStamp.cc
     src/minirpc/common/utils.cc
-    src/minirpc/core/nacos_config.cc
+    src/minirpc/common/nacos_config.cc
     src/minirpc/common/Random.cc
 )
 # 创建动态库
@@ -85,7 +85,7 @@ add_library(core STATIC
 #     source1.cpp 
 #     source2.cpp)
 
-# 为common添加包含目录
+# 为core添加包含目录
 target_include_directories(core PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>  # 安装后头文件会放到 include 目录
@@ -175,7 +175,6 @@ target_link_libraries(minirpc_main PRIVATE
 
 
 #start =============== example ===============
-# add_subdirectory(example)
 add_subdirectory(examples)
 #end =============== example ===============
 

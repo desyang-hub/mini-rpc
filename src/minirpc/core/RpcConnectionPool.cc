@@ -6,6 +6,7 @@
 
 #include <sys/epoll.h>
 #include <netinet/in.h>
+#include <stdexcept>
 
 namespace minirpc
 {
@@ -20,6 +21,9 @@ IConnectionPtr RpcConnectionPool::connect() {
     std::string addr = RpcClient::getLocalServiceAddress(server_name_);
     if (!addr.empty()) {
         int id = addr.find(':');
+        if (id == std::string::npos) {
+            throw std::runtime_error("Invalid address format, missing ':': " + addr);
+        }
         std::string ip = addr.substr(0, id);
         std::string port = addr.substr(id + 1);
         return IConnection::GetConnection(ip, atoi(port.c_str()));
@@ -31,6 +35,9 @@ IConnectionPtr RpcConnectionPool::connect() {
     LOG_INFO("Service info: %s", ipAddr.c_str());
 
     int id = ipAddr.find(':');
+    if (id == std::string::npos) {
+        throw std::runtime_error("Invalid address format, missing ':': " + ipAddr);
+    }
     std::string ip = ipAddr.substr(0, id);
     std::string port = ipAddr.substr(id + 1);
 

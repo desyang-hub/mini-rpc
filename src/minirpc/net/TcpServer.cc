@@ -6,7 +6,6 @@
 
 #include <sys/socket.h>
 #include <netinet/in.h>
-#include <sys/epoll.h>
 #include <fcntl.h>
 #include <unistd.h>
 #include <vector>
@@ -14,48 +13,37 @@
 #include <signal.h>
 
 #include "Nacos.h"
-#include "minirpc/core/nacos_config.h"
+#include "minirpc/common/nacos_config.h"
 
 namespace minirpc
 {
     using namespace nacos;
 
     void register_services(const std::vector<std::string>& services, int server_port, const std::string& host) {
-        // 注册信号处理器
-        // signal(SIGINT, signalHandler);   // Ctrl+C
-        // signal(SIGTERM, signalHandler);  // kill 命令
-    
         Properties configProps;
         configProps[PropertyKeyConst::SERVER_ADDR] = host;
         INacosServiceFactory *factory = NacosFactoryFactory::getNacosFactory(configProps);
         ResourceGuard<INacosServiceFactory> _guardFactory(factory);
-        
+
         auto g_namingSvc = factory->CreateNamingService();
         ResourceGuard<NamingService> _serviceGuard(g_namingSvc);
 
-        LOG_INFO("register server instanse %s:%d", host.c_str(), server_port);
-    
+        LOG_INFO("register server instance %s:%d", host.c_str(), server_port);
+
         Instance instance;
         instance.clusterName = "DefaultCluster";
         instance.ip = host;
         instance.port = server_port;
-        // instance.instanceId = "1";
         instance.ephemeral = true;
-    
-        // 注册服务
+
         try {
             for (const std::string& serviceName : services) {
-                // std::cout << "name: " << serviceName << std::endl;
                 g_namingSvc->registerInstance(serviceName, instance);
             }
         } catch (NacosException &e) {
-            // std::cerr << "❌ 注册失败: " << e.what() << std::endl;
-            exit(-1);
+            throw std::runtime_error(std::string("Nacos registration failed: ") + e.what());
         }
-    
-        // std::cout << "🚀 服务已启动，等待信号退出 (Ctrl+C)..." << std::endl;
-    
-        // 主循环：等待退出信号
+
         while (TcpServer::is_running_.load()) {
             std::this_thread::sleep_for(std::chrono::milliseconds(500));
         }
@@ -64,242 +52,159 @@ namespace minirpc
 
     std::atomic_bool TcpServer::is_running_ = true;
 
-    TcpServer::TcpServer() {
-
-    }
+    TcpServer::TcpServer() = default;
 
     TcpServer::~TcpServer() {
-
+        for (auto& [fd, pair] : connMap_) {
+            delete pair.second; // Channel*
+            // Conn is managed by shared_ptr
+        }
     }
 
     void TcpServer::sigHandler(int sig) {
         is_running_.store(false);
     }
 
-// 初始化, 创建sockfd
-int TcpServer::init(int port) {
-    // 1. 创建socket
-    sockfd_ = socket(AF_INET, SOCK_STREAM, 0);
-    if (sockfd_ < 0) {
-        LOG_FATAL("create socket error");
-        // perror("create socket error");
-        // exit(-1);
-    }
-
-    // 2. 设置地址复用
-    int opt = 1;
-    setsockopt(sockfd_, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof opt);
-
-    // 3. bind
-    struct sockaddr_in  address;
-    address.sin_family = AF_INET;
-    address.sin_addr.s_addr = INADDR_ANY; // 监听所有请求
-    address.sin_port = htons(port);
-
-    if (bind(sockfd_, (struct sockaddr*)&address, sizeof address) < 0) {
-        // perror("bind error");
-        close(sockfd_);
-        LOG_FATAL("create socket error");
-        // exit(-1);
-    }
-
-    LOG_INFO("Listen port 0.0.0.0:%d", port);
-    // std::cout << "Listen port 0.0.0.0:" << port << std::endl;
-
-    // listen
-    if (listen(sockfd_, 3) < 0) { // 第二个参数表示的是如果等待的数量超过3，直接拒绝
-        // perror("listen error");
-        close(sockfd_);
-        // exit(-1);
-        LOG_FATAL("listen error");
-    }
-
-    return sockfd_;
-}
-
-
-/**
- * @brief 启用服务注册子线程
- */
-void TcpServer::lunch_service_register(int port, const std::string& host) {
-
-    auto& services = RpcServer::GetServices();
-    // LOG_INFO("name: %s:", services[0].c_str());
-    // std::cout << services.size() << std::endl;
-    
-    std::thread worker(register_services, RpcServer::GetServices(), port, host);
-    worker.detach();
-}
-
-
-// 移除该连接
-void TcpServer::removeConn(Conn* c) {
-    auto it = connMap_.find(c->fd());
-
-    // not exists
-    if (it == connMap_.end()) {
-        close(c->fd());
-        return;
-    }
-
-    if (epoll_ctl(epollfd_, EPOLL_CTL_DEL, c->fd(), nullptr) == -1) {
-        LOG_ERROR("epoll ctl error");
-    }
-    close(c->fd());
-    connMap_.erase(it);
-    delete c;
-}
-
-void TcpServer::ClienHandler(TcpServer* server, Conn* c) {
-    // ET模式：一次处理完所有数据
-    while (true) {
-        int len = c->readMsg();
-        if (len < 0) {
-            LOG_DEBUG("User %d disconnected.", c->fd());
-            server->removeConn(c);
-            break;
+    int TcpServer::init(int port) {
+        sockfd_ = socket(AF_INET, SOCK_STREAM, 0);
+        if (sockfd_ < 0) {
+            LOG_FATAL("create socket error");
         }
-        if (len == 0) break;
 
-        std::string body, srv_name;
-        ProtocolHeader header;
-        if (c->decode(body, srv_name, header)) {
-            std::string res;
-            if (RpcServer::Call(srv_name, body, res)) {
-                auto bytes = Encoder::Encode(header, res);
-                if (send(c->fd(), bytes.data(), bytes.size(), 0) == -1) {
-                    LOG_ERROR("send error");
-                    break;
+        int opt = 1;
+        setsockopt(sockfd_, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof opt);
+
+        struct sockaddr_in address;
+        address.sin_family = AF_INET;
+        address.sin_addr.s_addr = INADDR_ANY;
+        address.sin_port = htons(port);
+
+        if (bind(sockfd_, reinterpret_cast<struct sockaddr*>(&address), sizeof address) < 0) {
+            close(sockfd_);
+            LOG_FATAL("bind error");
+        }
+
+        LOG_INFO("Listen port 0.0.0.0:%d", port);
+
+        if (listen(sockfd_, 3) < 0) {
+            close(sockfd_);
+            LOG_FATAL("listen error");
+        }
+
+        set_nonblocking(sockfd_);
+        return sockfd_;
+    }
+
+    void TcpServer::lunch_service_register(int port, const std::string& host) {
+        std::thread worker(register_services, RpcServer::GetServices(), port, host);
+        worker.detach();
+    }
+
+    void TcpServer::removeConn(int fd) {
+        auto it = connMap_.find(fd);
+        if (it == connMap_.end()) return;
+
+        auto& [conn, ch] = it->second;
+        // Disable events — no more callbacks will fire after this
+        ch->disableAll();
+        // Close socket so worker threads see the error
+        ::close(fd);
+        // Schedule Channel deletion on the EventLoop thread
+        loop_->deferredDelete(ch);
+        connMap_.erase(it);
+    }
+
+    void TcpServer::ClienHandler(TcpServer* server, std::shared_ptr<Conn> c) {
+        int fd = c->fd();
+        // ET mode: drain all available data
+        while (true) {
+            int len = c->readMsg();
+            if (len < 0) {
+                LOG_DEBUG("User %d disconnected.", fd);
+                // Schedule removal on the EventLoop thread
+                // (runInLoop would be ideal, but deferredDelete is safe from any thread)
+                server->removeConn(fd);
+                break;
+            }
+            if (len == 0) break;
+
+            std::string body, srv_name;
+            ProtocolHeader header;
+            if (c->decode(body, srv_name, header)) {
+                std::string res;
+                if (RpcServer::Call(srv_name, body, res)) {
+                    auto bytes = Encoder::Encode(header, res);
+                    if (send(fd, bytes.data(), bytes.size(), 0) == -1) {
+                        LOG_ERROR("send error");
+                        break;
+                    }
+                }
+                else {
+                    header.code = FAILED;
+                    auto bytes = Encoder::Encode(header, "");
+                    send(fd, bytes.data(), bytes.size(), 0);
                 }
             }
-            else {
-                header.code = FAILED;
-                auto bytes = Encoder::Encode(header, "");
-                send(c->fd(), bytes.data(), bytes.size(), 0);
-            }
         }
     }
-}
 
 
-void TcpServer::loop() {
-    signal(SIGINT,  &TcpServer::sigHandler);   // Ctrl+C
-    signal(SIGTERM, &TcpServer::sigHandler);  // kill 命令
+    void TcpServer::loop() {
+        signal(SIGINT,  sigHandler);
+        signal(SIGTERM, sigHandler);
+        signal(SIGPIPE, SIG_IGN);
 
-    // 1. 创建epoll
-    epollfd_ = epoll_create1(EPOLL_CLOEXEC);
-    if (epollfd_ < 0) {
-        // perror("epoll create error");
-        close(sockfd_);
-        LOG_FATAL("epoll create error");
-    }
+        loop_ = std::make_unique<EventLoop>();
 
-    // 2. 注册fd监听到epoll
-    epoll_event ev;
-    connMap_[sockfd_] = new Conn(sockfd_);
-    ev.events = EPOLLIN | EPOLLET; // ET 触发，只要通知了就要一直读，直到空了(EAGAIN, EWOULDBLOCK)
-    ev.data.ptr = connMap_[sockfd_];
-    
-    LOG_INFO("Epoll ET Mode epfd=%d", epollfd_);
-    // std::cout << "Epoll ET Mode epfd=" << epollfd << std::endl;
+        // Register listen socket with EventLoop
+        auto listenConn = std::make_shared<Conn>(sockfd_);
+        auto* listenCh = new Channel(loop_.get(), sockfd_);
+        connMap_[sockfd_] = {listenConn, listenCh};
 
-    if (epoll_ctl(epollfd_, EPOLL_CTL_ADD, sockfd_, &ev) < 0) {
-        // perror("epoll add sockfd error");
-        close(sockfd_);
-        close(epollfd_);
-        // exit(-1);
-        LOG_FATAL("epoll add sockfd error");
-    }
+        listenCh->setReadEventCallback([this](const TimeStamp&) {
+            sockaddr_in client_addr;
+            socklen_t len = sizeof(client_addr);
 
-    // 3. 进行事件监听
-    // epoll_event events[1024];
-    std::vector<epoll_event> events(1024);
-    
-
-    while (is_running_.load()) {
-        // 阻塞等待，返回触发的事件个数
-        int numEvents = epoll_wait(epollfd_, events.data(), events.size(), -1); // -1 表示无限等待
-
-        int saveErrno = errno;
-
-        if (numEvents == -1) {
-            if (saveErrno == EINTR) continue; // 被信号中断
-            perror("epoll wait error");
-            break;
-        }
-
-        // 处理被激活的事件
-        for (int i = 0; i < numEvents; ++i) {
-            Conn* c = static_cast<Conn*>(events[i].data.ptr);
-            int fd = c->fd();
-
-            if (fd == sockfd_) { // 这个是sockfd的用户请求事件
-                sockaddr_in client_addr;
-                socklen_t len = sizeof(client_addr);
-
-                int client_fd = accept(fd, (sockaddr*)&client_addr, &len);
-
+            while (true) {
+                int client_fd = accept(sockfd_, reinterpret_cast<sockaddr*>(&client_addr), &len);
                 if (client_fd < 0) {
-                    // accept失败
-                    continue;
+                    if (errno == EAGAIN || errno == EWOULDBLOCK) break;
+                    LOG_ERROR("accept error");
+                    break;
                 }
 
                 if (onConnectedCallBack_) {
                     onConnectedCallBack_(client_fd);
                 }
-                
+
                 LOG_INFO("User %d Connected", client_fd);
-                connMap_[client_fd] = new Conn(client_fd);
+                set_nonblocking(client_fd);
 
-                set_nonblocking(client_fd); // 设置非阻塞
+                auto conn = std::make_shared<Conn>(client_fd);
+                auto* ch = new Channel(loop_.get(), client_fd);
+                connMap_[client_fd] = {conn, ch};
 
-                // 将事件注册到epoll
-                epoll_event ev;
-                ev.events = EPOLLIN | EPOLLET;
-                // ev.data.fd = client_fd;
-                ev.data.ptr = connMap_[client_fd];
-
-                if (epoll_ctl(epollfd_, EPOLL_CTL_ADD, client_fd, &ev) < 0) {
-                    close(client_fd);
-                    continue;
-                }
+                std::shared_ptr<Conn> connRef = conn;
+                ch->setReadEventCallback([this, connRef](const TimeStamp&) {
+                    threadPool_.enqueue(&TcpServer::ClienHandler, this, connRef);
+                });
+                ch->enableReading();
             }
-            else {
-                // 这里是一个用户client_fd 事件
+        });
+        listenCh->enableReading();
 
-                // 最好使用线程池来进行调度，否则开销巨大
-                // ClienHandler(this, c);
-                // std::thread request_woker(&TcpServer::ClienHandler, this, c);
-                // request_woker.detach();
-                
-                threadPool_.enqueue(&TcpServer::ClienHandler, this, c);
-                // threadPool_.submit(std::bind(&TcpServer::ClienHandler, this, c));
-            }
-        }
+        LOG_INFO("EventLoop start, listening on fd=%d", sockfd_);
 
-        // 如果事件数量太多了，自动进行扩容
-        if (numEvents == events.size()) {
-            events.resize(2 * numEvents);
-        }
+        loop_->loop();
     }
 
-}
+    void TcpServer::serve(int port) {
+        init(port);
 
-// 服务方法
-void TcpServer::serve(int port) {
-    // 创建socket
-    int sockfd = init(port);
+        std::string host = GetNacosServerHost();
+        lunch_service_register(port, host);
 
-    std::string host = GetNacosServerHost();
+        loop();
+    }
 
-    lunch_service_register(port, host);
-
-    // 创建epoll
-    loop();
-}
-
-
-
-
-    
 } // namespace minirpc

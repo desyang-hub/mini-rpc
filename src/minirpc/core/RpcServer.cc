@@ -20,7 +20,6 @@ namespace minirpc
         if (it == handlers_.end())
         {
             LOG_ERROR("Method not support %s", name.c_str());
-            // std::cout << "Method not support " << name << std::endl;
             res = "Method not support";
             return false;
         }
@@ -32,7 +31,6 @@ namespace minirpc
         catch (const std::exception &e)
         {
             LOG_ERROR("%s", e.what());
-            // std::cerr << e.what() << '\n';
             res = e.what();
             return false;
         }

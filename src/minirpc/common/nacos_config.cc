@@ -1,4 +1,4 @@
-#include "minirpc/core/nacos_config.h"
+#include "minirpc/common/nacos_config.h"
 #include <cstdlib>
 
 namespace minirpc {

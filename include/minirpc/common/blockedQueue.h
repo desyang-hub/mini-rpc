@@ -4,7 +4,6 @@
 
 #include <mutex>
 #include <queue>
-#include <iostream>
 #include <condition_variable>
 
 namespace minirpc

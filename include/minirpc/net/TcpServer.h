@@ -4,38 +4,35 @@
 #include "minirpc/common/timeStamp.h"
 #include "minirpc/common/ThreadPool.h"
 #include "minirpc/net/Conn.h"
+#include "minirpc/net/Channel.h"
+#include "minirpc/net/EventLoop.h"
 
-
-#include <iostream>
 #include <unordered_map>
 #include <functional>
 #include <atomic>
+#include <memory>
 
 namespace minirpc
 {
 
-
-
 class TcpServer : public nonecopyable
 {
 private:
-    std::function<void(const std::string&)> onMessageCallBack_; // 消息回调
-    std::function<void(int fd)> onConnectedCallBack_; // 连接回调
+    std::function<void(const std::string&)> onMessageCallBack_;
+    std::function<void(int fd)> onConnectedCallBack_;
 
-    int sockfd_;
-    int epollfd_;
-    std::unordered_map<int, Conn*> connMap_;
+    int sockfd_{-1};
+    std::unique_ptr<EventLoop> loop_;
+    std::unordered_map<int, std::pair<std::shared_ptr<Conn>, Channel*>> connMap_;
     ThreadPool threadPool_;
-    
-    
 
     int init(int port);
     void lunch_service_register(int port, const std::string& host="127.0.0.1");
     void loop();
-    void removeConn(Conn* c);
+    void removeConn(int fd);
     static void sigHandler(int sig);
 
-    static void ClienHandler(TcpServer* server, Conn* c);
+    static void ClienHandler(TcpServer* server, std::shared_ptr<Conn> c);
 
 public:
     static std::atomic_bool is_running_;
@@ -53,27 +50,19 @@ public:
     void serve(int port=8080);
 
 public:
-    TcpServer(/* args */);
+    TcpServer();
     ~TcpServer();
 
-    // 移动构造函数
     TcpServer(TcpServer&& other) noexcept
-        : nonecopyable() // 1. 关键！显式调用基类的默认构造函数
+        : nonecopyable()
     {
-        // 2. 手动移动所有成员变量
         this->onMessageCallBack_ = std::move(other.onMessageCallBack_);
         this->onConnectedCallBack_ = std::move(other.onConnectedCallBack_);
         this->sockfd_ = other.sockfd_;
-        this->epollfd_ = other.epollfd_;
+        this->loop_ = std::move(other.loop_);
         this->connMap_ = std::move(other.connMap_);
-
-        // 3. 将“被移动”的对象资源置为无效状态，这是一个好习惯
         other.sockfd_ = -1;
-        other.epollfd_ = -1;
     }
-
-    // TcpServer& operator=(TcpServer&&) = default;
 };
-
 
 } // namespace minirpc

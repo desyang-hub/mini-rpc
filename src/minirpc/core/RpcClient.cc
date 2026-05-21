@@ -37,8 +37,8 @@ std::string RpcClient::getLocalServiceAddress(const std::string& service_name) {
 
 RpcClient::RpcClient()
     : request_id_(0),
-    connnection_pool_factory_(IConnectionPoolFactory::CreateConnectionPoolFactory()) {
-    connnection_pool_factory_->setMessageHandler(
+    connection_pool_factory_(IConnectionPoolFactory::CreateConnectionPoolFactory()) {
+    connection_pool_factory_->setMessageHandler(
         [this](IConnection* c) { messageHandler(c); });
 }
 
@@ -68,7 +68,7 @@ bool RpcClient::send(const Bytes& bytes, const std::string& service_name, const 
     // 发送消息
     try
     {
-        IConnectionPool* pool = connnection_pool_factory_->getConnectionPool(service_name, group_name);
+        IConnectionPool* pool = connection_pool_factory_->getConnectionPool(service_name, group_name);
         if (pool == nullptr) {
             LOG_ERROR("connection pool not found for service %s@%s", service_name.c_str(), group_name.c_str());
             return false;

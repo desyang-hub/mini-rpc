@@ -1,15 +1,18 @@
 #pragma once
 
-#include <iostream>
 #include <cstdint>   // 添加这行
 #include <cstddef>   // 可选，提供 size_t
 #include <vector>
 #include <algorithm>
 #include <cstring>
+#include <cerrno>
+#include <string>
 #include <cassert>
 #include <sys/socket.h>
 #include <sys/uio.h>
 #include <unistd.h>
+
+namespace minirpc {
 
 class RingBuffer {
 private:
@@ -237,3 +240,5 @@ private:
         capacity_ = new_capacity;
     }
 };
+
+} // namespace minirpc

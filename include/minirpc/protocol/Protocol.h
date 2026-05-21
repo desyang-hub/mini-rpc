@@ -1,6 +1,5 @@
 #pragma once
 // 用于定义协议结构体
-#include <iostream>
 #include <cstdint>   // 添加这行
 #include <cstddef>   // 可选，提供 size_t
 
@@ -15,7 +14,7 @@ const uint16_t MAGIC_NUMBER = 0x5250; // 0x5250 ('R''P')
 enum MessageType : uint8_t {
     MSG_REQUEST = 1,    // 请求
     MSG_RESPONSE = 2,   // 响应
-    MSG_HEARTABAT = 3   // 心跳
+    MSG_HEARTBEAT = 3   // 心跳
 };
 
 // 3. 定义序列化类型
