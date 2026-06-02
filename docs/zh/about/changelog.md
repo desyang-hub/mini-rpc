@@ -1,5 +1,44 @@
 # 更新日志
 
+## v2.0 (2026-06-02)
+
+### 安全审计与修复
+
+本次发布为全面的安全审计版本，修复了 12 个漏洞，涵盖数据竞争、协议完整性、缓冲区溢出等问题。
+
+#### 严重漏洞修复
+
+- **TcpServer::connMap_ 数据竞争** — 为 `connMap_` 添加 `std::shared_mutex` 保护，修复 accept 回调与 removeConn 之间的并发读写竞争
+- **RpcClient GetInstance() 数据竞争** — 使用 mutex-guarded 构造替代双重检查锁定，修复多线程下的双重构造问题
+- **CRC32 覆盖范围扩展** — 将 CRC32 校验扩展为覆盖 `srv_name + body`，而非仅 body，防止服务名篡改攻击
+- **getConnection 无界递归** — 将递归重连改为有限次数的重试循环，防止持久化故障下的栈溢出
+
+#### 高危漏洞修复
+
+- **LOG_FATAL 缓冲区溢出** — 修复 `snprintf` 中第二参数使用固定 1024 而非剩余空间的问题
+- **Nacos URL 注入** — 对服务名进行 URL 编码后再拼接 HTTP 请求，防止特殊字符破坏或注入查询参数
+- **RpcConnection::close() 数据竞争** — 将 `closed_` 改为 `std::atomic<bool>`，修复健康检查与关闭操作的并发问题
+- **TcpServer 析构函数不安全** — 在析构时先退出事件循环再清理 connMap_，避免双重释放
+
+#### 中危漏洞修复
+
+- **getConnection for 循环逻辑错误** — 修复 pop 操作导致只检查前 N/2 个元素的问题
+- **TcpServer::ClienHandler 部分发送** — 添加 send 循环确保全部数据发送完成
+- **Random 使用不安全 rand()** — 替换为 mt19937 + uniform_int_distribution，支持线程安全
+- **RingBuffer::read_fd 缺少 EINTR 处理** — 对 `::read()`/`::readv()` 添加 EINTR 重试
+
+### 测试
+
+- 新增 `test_security` 测试套件，包含 10 个回归测试
+- 增强 `test_protocol`、`test_net` 和 `test_core` 测试覆盖率
+
+### 文档
+
+- README 新增安全考虑章节
+- 更新协议文档中 CRC32 覆盖范围说明
+
+---
+
 ## v1.5.1 (2026-04-29)
 
 ### 重大重构

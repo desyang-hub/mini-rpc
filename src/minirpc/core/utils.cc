@@ -57,11 +57,30 @@ std::string parseFirstInstance(const std::string &jsonStr) {
 }
 
 
+namespace {
+
+std::string urlEncode(const std::string& value) {
+    std::string encoded;
+    encoded.reserve(value.size() * 3);
+    for (unsigned char c : value) {
+        if (isalnum(c) || c == '-' || c == '_' || c == '.' || c == '~') {
+            encoded += c;
+        } else {
+            char hex[4];
+            snprintf(hex, sizeof(hex), "%%%02X", c);
+            encoded += hex;
+        }
+    }
+    return encoded;
+}
+
+} // namespace
+
 std::string getServiceAddress(const std::string& srvName) {
     CURL *curl = curl_easy_init();
     std::string response;
     if (curl) {
-        std::string url = "http://" + GetNacosServerAddr() + "/nacos/v1/ns/instance/list?serviceName=" + srvName;
+        std::string url = "http://" + GetNacosServerAddr() + "/nacos/v1/ns/instance/list?serviceName=" + urlEncode(srvName);
         curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
         curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteCallback);
         curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);

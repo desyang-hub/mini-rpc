@@ -55,9 +55,17 @@ namespace minirpc
     TcpServer::TcpServer() = default;
 
     TcpServer::~TcpServer() {
-        for (auto& [fd, pair] : connMap_) {
-            delete pair.second; // Channel*
-            // Conn is managed by shared_ptr
+        is_running_.store(false);
+        if (loop_) {
+            loop_->quit();
+        }
+        {
+            std::lock_guard<std::shared_mutex> lock(connMutex_);
+            for (auto& [fd, pair] : connMap_) {
+                delete pair.second; // Channel*
+                // Conn is managed by shared_ptr
+            }
+            connMap_.clear();
         }
     }
 
@@ -101,6 +109,7 @@ namespace minirpc
     }
 
     void TcpServer::removeConn(int fd) {
+        std::lock_guard<std::shared_mutex> lock(connMutex_);
         auto it = connMap_.find(fd);
         if (it == connMap_.end()) return;
 
@@ -134,15 +143,32 @@ namespace minirpc
                 std::string res;
                 if (RpcServer::Call(srv_name, body, res)) {
                     auto bytes = Encoder::Encode(header, res);
-                    if (send(fd, bytes.data(), bytes.size(), 0) == -1) {
-                        LOG_ERROR("send error");
-                        break;
+                    size_t sent = 0;
+                    bool send_ok = true;
+                    while (sent < bytes.size()) {
+                        ssize_t n = send(fd, bytes.data() + sent, bytes.size() - sent, 0);
+                        if (n < 0) {
+                            if (errno == EINTR) continue;
+                            LOG_ERROR("send error");
+                            send_ok = false;
+                            break;
+                        }
+                        sent += n;
                     }
+                    if (!send_ok) break;
                 }
                 else {
                     header.code = FAILED;
                     auto bytes = Encoder::Encode(header, "");
-                    send(fd, bytes.data(), bytes.size(), 0);
+                    size_t sent = 0;
+                    while (sent < bytes.size()) {
+                        ssize_t n = send(fd, bytes.data() + sent, bytes.size() - sent, 0);
+                        if (n < 0) {
+                            if (errno == EINTR) continue;
+                            break;
+                        }
+                        sent += n;
+                    }
                 }
             }
         }
@@ -159,7 +185,10 @@ namespace minirpc
         // Register listen socket with EventLoop
         auto listenConn = std::make_shared<Conn>(sockfd_);
         auto* listenCh = new Channel(loop_.get(), sockfd_);
-        connMap_[sockfd_] = {listenConn, listenCh};
+        {
+            std::lock_guard<std::shared_mutex> lock(connMutex_);
+            connMap_[sockfd_] = {listenConn, listenCh};
+        }
 
         listenCh->setReadEventCallback([this](const TimeStamp&) {
             sockaddr_in client_addr;
@@ -182,7 +211,10 @@ namespace minirpc
 
                 auto conn = std::make_shared<Conn>(client_fd);
                 auto* ch = new Channel(loop_.get(), client_fd);
-                connMap_[client_fd] = {conn, ch};
+                {
+                    std::lock_guard<std::shared_mutex> lock(connMutex_);
+                    connMap_[client_fd] = {conn, ch};
+                }
 
                 std::shared_ptr<Conn> connRef = conn;
                 ch->setReadEventCallback([this, connRef](const TimeStamp&) {

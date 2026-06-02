@@ -1,19 +1,24 @@
 #pragma once
 
+#include <random>
+#include <mutex>
+
 namespace minirpc
 {
 
-// 随机数产生类
 class Random
 {
-private:
-    static Random& GetInstance();
 public:
     Random();
 
     static int RandInt(int start, int end);
 
+private:
+    static Random& GetInstance();
     int randInt(int start, int end);
+
+    std::mt19937 rng_;
+    std::mutex mutex_;
 };
-    
+
 } // namespace minirpc

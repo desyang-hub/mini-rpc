@@ -57,8 +57,8 @@ private:
             return nullptr;
         }
 
-        // 5. 校验CRC32
-        if (simple_crc32(raw_data.data() + header_len + headerPtr->srv_name_len, headerPtr->body_len) != headerPtr->checksum) {
+        // 5. 校验CRC32（覆盖srv_name + body）
+        if (simple_crc32(raw_data.data() + header_len, headerPtr->srv_name_len + headerPtr->body_len) != headerPtr->checksum) {
             std::cerr << "crc32 check failed" << std::endl;
             error_code = ERR;
             return nullptr;

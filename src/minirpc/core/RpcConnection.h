@@ -3,6 +3,7 @@
 #include "minirpc/core/IConnection.h"
 #include "minirpc/net/BufferedConnection.h"
 
+#include <atomic>
 #include <chrono>
 #include <string>
 
@@ -51,7 +52,7 @@ private:
     uint16_t port_;
     int sock_;
     bool healthy_{true};
-    bool closed_{false};
+    std::atomic<bool> closed_{false};
 };
 
 }  // namespace minirpc

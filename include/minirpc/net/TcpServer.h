@@ -11,6 +11,7 @@
 #include <functional>
 #include <atomic>
 #include <memory>
+#include <shared_mutex>
 
 namespace minirpc
 {
@@ -24,6 +25,7 @@ private:
     int sockfd_{-1};
     std::unique_ptr<EventLoop> loop_;
     std::unordered_map<int, std::pair<std::shared_ptr<Conn>, Channel*>> connMap_;
+    mutable std::shared_mutex connMutex_;
     ThreadPool threadPool_;
 
     int init(int port);

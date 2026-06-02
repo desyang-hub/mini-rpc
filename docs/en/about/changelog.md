@@ -1,5 +1,44 @@
 # Changelog
 
+## v2.0 (2026-06-02)
+
+### Security Audit & Fixes
+
+This release is a comprehensive security audit, fixing 12 vulnerabilities across data races, protocol integrity, buffer overflows, and code quality issues.
+
+#### Critical Fixes
+
+- **TcpServer::connMap_ data race** — Added `std::shared_mutex` protection for `connMap_`, fixing concurrent read/write between accept callback and `removeConn`
+- **RpcClient GetInstance() data race** — Replaced double-checked locking with mutex-guarded construction, preventing double instantiation under multi-threaded access
+- **CRC32 coverage expansion** — Extended CRC32 checksum to cover `srv_name + body` instead of just body, preventing service name tampering attacks
+- **getConnection unbounded recursion** — Replaced recursive reconnect with bounded retry loop, preventing stack overflow during persistent failures
+
+#### High Fixes
+
+- **LOG_FATAL buffer overflow** — Fixed `snprintf` second call using hardcoded 1024 instead of remaining buffer space
+- **Nacos URL injection** — Added URL encoding for service names before HTTP concatenation, preventing special character injection
+- **RpcConnection::close() data race** — Changed `closed_` to `std::atomic<bool>`, fixing race between health check and close operations
+- **TcpServer destructor unsafe shutdown** — Destructor now quits event loop before cleaning up connMap_, avoiding double-delete
+
+#### Medium Fixes
+
+- **getConnection for-loop logic bug** — Fixed pop-in-loop causing only first N/2 elements to be checked
+- **TcpServer::ClienHandler partial sends** — Added send loop to ensure all bytes are transmitted
+- **Insecure rand() in Random** — Replaced with mt19937 + uniform_int_distribution, thread-safe
+- **RingBuffer::read_fd missing EINTR handling** — Added EINTR retry for `::read()`/`::readv()`
+
+### Testing
+
+- New `test_security` test suite with 10 regression tests
+- Enhanced `test_protocol`, `test_net`, and `test_core` test coverage
+
+### Documentation
+
+- Added Security Considerations section to README
+- Updated protocol docs with corrected CRC32 coverage description
+
+---
+
 ## v1.5.1 (2025-04-29)
 
 ### Major Refactoring

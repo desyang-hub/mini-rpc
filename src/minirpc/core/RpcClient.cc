@@ -46,9 +46,11 @@ RpcClient::RpcClient()
 RpcClient::~RpcClient() {
 }
 
+static std::mutex s_rpc_client_mutex;
 static std::unique_ptr<RpcClient> s_rpc_client_instance;
 
 RpcClient& RpcClient::GetInstance() {
+    std::lock_guard<std::mutex> lock(s_rpc_client_mutex);
     if (!s_rpc_client_instance) {
         s_rpc_client_instance = std::make_unique<RpcClient>();
     }
@@ -56,6 +58,7 @@ RpcClient& RpcClient::GetInstance() {
 }
 
 void RpcClient::ResetInstance() {
+    std::lock_guard<std::mutex> lock(s_rpc_client_mutex);
     s_rpc_client_instance.reset();
 }
 

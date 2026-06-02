@@ -145,7 +145,7 @@ IConnectionPtr RpcConnectionPool::getConnection() {
     {
         std::lock_guard<std::mutex> lock(mutex_);
         
-        for (int i = 0; i < connection_que_.size(); ++i) {
+        while (!connection_que_.empty()) {
             if (connection_que_.front()->isHealthy()) {
                 conPtr = std::move(connection_que_.front());
                 connection_que_.pop();
@@ -159,14 +159,23 @@ IConnectionPtr RpcConnectionPool::getConnection() {
 
     // 应该实现conn释放时，自动归还连接，获取失效就不用返回注册了
     if (conPtr == nullptr) {
-        // 创建连接
-        conPtr = connect();
-        // 将创建的连接添加到消息监听
-        addConnectionListener(conPtr.get());
-        // 如果连接已失效（如 epoll 注册失败），直接丢弃
-        if (!conPtr->isHealthy()) {
-            LOG_ERROR("Connection failed after listener registration");
-            return getConnection(); // 递归重试
+        constexpr int kMaxRetries = 3;
+        for (int retry = 0; retry < kMaxRetries; ++retry) {
+            // 创建连接
+            conPtr = connect();
+            // 将创建的连接添加到消息监听
+            addConnectionListener(conPtr.get());
+            // 如果连接已失效（如 epoll 注册失败），丢弃并重试
+            if (!conPtr->isHealthy()) {
+                LOG_ERROR("Connection failed (attempt %d/%d)", retry + 1, kMaxRetries);
+                conPtr.reset();
+                continue;
+            }
+            break;
+        }
+        if (conPtr == nullptr) {
+            LOG_ERROR("All %d connection attempts failed", kMaxRetries);
+            return nullptr;
         }
     }
 

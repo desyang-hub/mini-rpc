@@ -178,6 +178,23 @@ TEST(EncoderTest, EncodeReturnsValidBytes) {
     EXPECT_GT(bytes.size(), 0);
 }
 
+TEST(ProtocolTest, DecodeTamperedSrvName) {
+    std::string srvName = "Target.Service";
+    std::string body = "payload";
+    Bytes encoded = Encoder::Encode(srvName, body);
+
+    constexpr int header_len = sizeof(ProtocolHeader);
+    // 篡改 service name（保持 header 中 srv_name_len 不变）
+    // 修改 srv_name 中的字符
+    encoded[header_len] ^= 0xFF;
+
+    ProtocolHeader header;
+    std::string decoded_body, decoded_name;
+    int result = Decoder::Decode(encoded, header, decoded_name, decoded_body);
+
+    EXPECT_EQ(result, ERR);
+}
+
 TEST(EncoderTest, EncodeContainsMagic) {
     auto bytes = Encoder::Encode("Test", "data");
     // 小端序机器上，低字节在前

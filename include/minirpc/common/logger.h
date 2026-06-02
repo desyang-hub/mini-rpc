@@ -43,7 +43,7 @@ if (minirpc::Logger::GetInstance().getLevel() >= minirpc::ERROR) {              
 if (true) {                                    \
         char buf[1024];                     \
         snprintf(buf, 1024, "%s:%d %s ", __FILE__, __LINE__, __FUNCTION__); \
-        snprintf(buf + strlen(buf), 1024, format, ##__VA_ARGS__); \
+        snprintf(buf + strlen(buf), sizeof(buf) - strlen(buf), format, ##__VA_ARGS__); \
         minirpc::Logger::GetInstance().log(buf, minirpc::FATAL);     \
         throw std::runtime_error(buf); \
     }

@@ -151,22 +151,24 @@ public:
         size_t writable = writable_bytes();
         ssize_t n = 0;
         
-        if (write_pos_ + writable <= capacity_) {
-            // 不跨越边界，直接读取
-            n = ::read(fd, &buffer_[write_pos_], writable);
-        } else {
-            // 跨越边界，使用 readv
-            struct iovec iov[2];
-            iov[0].iov_base = &buffer_[write_pos_];
-            iov[0].iov_len = capacity_ - write_pos_;
-            iov[1].iov_base = &buffer_[0];
-            iov[1].iov_len = std::min(writable - (capacity_ - write_pos_), 
-                                     static_cast<size_t>(capacity_));
-            
-            int iovcnt = (iov[1].iov_len > 0) ? 2 : 1;
-            n = ::readv(fd, iov, iovcnt);
-        }
-        
+        do {
+            if (write_pos_ + writable <= capacity_) {
+                // 不跨越边界，直接读取
+                n = ::read(fd, &buffer_[write_pos_], writable);
+            } else {
+                // 跨越边界，使用 readv
+                struct iovec iov[2];
+                iov[0].iov_base = &buffer_[write_pos_];
+                iov[0].iov_len = capacity_ - write_pos_;
+                iov[1].iov_base = &buffer_[0];
+                iov[1].iov_len = std::min(writable - (capacity_ - write_pos_),
+                                         static_cast<size_t>(capacity_));
+
+                int iovcnt = (iov[1].iov_len > 0) ? 2 : 1;
+                n = ::readv(fd, iov, iovcnt);
+            }
+        } while (n < 0 && errno == EINTR);
+
         if (n > 0) {
             write_pos_ = (write_pos_ + n) % capacity_;
             size_ += n;

@@ -77,6 +77,33 @@ std::string result = stub.login("root", "password");
 - [API Reference](https://desyang-hub.github.io/mini-rpc/zh/api/reference.html)
 - [Nacos Integration](https://desyang-hub.github.io/mini-rpc/zh/deploy/nacos.html)
 
+## Security Considerations
+
+### Protocol Security
+
+- **CRC32 Integrity**: All wire-format messages include a CRC32 checksum covering both the service name and body, preventing tampering attacks that could redirect requests to unintended handlers. Tampered packets are rejected at the decoder level.
+- **No Authentication/TLS**: The protocol does not provide authentication or encryption. Deploy behind a trusted network boundary or use a TLS-terminating proxy (e.g., Nginx, Envoy) for production environments.
+- **Magic Number Validation**: Each message starts with a 2-byte magic number (`0x5250`). Packets with invalid magic are discarded.
+
+### Thread Safety
+
+- **Singleton Initialization**: `RpcClient::GetInstance()` and `Logger::GetInstance()` are thread-safe (mutex-guarded or C++17 static local guarantees).
+- **Connection State**: `RpcConnection::close()` uses `std::atomic<bool>` for the `closed_` flag to prevent data races between health checks and connection teardown.
+- **TcpServer Connection Map**: `connMap_` is protected by a `std::shared_mutex` to prevent concurrent modification from the event loop and thread pool workers.
+- **Random Number Generation**: `Random::RandInt()` uses `std::mt19937` with a `std::mutex` for thread-safe, unbiased random number generation.
+
+### Input Validation
+
+- **Nacos Service Names**: Service names are URL-encoded before being embedded in Nacos API requests, preventing query parameter injection.
+- **Body Size Limit**: The decoder enforces a maximum body size of 64MB to prevent memory exhaustion attacks.
+- **Logging**: `LOG_FATAL` uses correct buffer size calculations to prevent buffer overflows, even with long file paths or function names.
+
+### Known Limitations
+
+- No built-in rate limiting or DoS protection at the protocol level.
+- Connection retries are capped at 3 attempts to prevent infinite retry loops.
+- `rand()` has been replaced with `std::mt19937` for cryptographic safety in service instance selection (load balancing via random choice).
+
 ## License
 
 [MIT License](LICENSE)

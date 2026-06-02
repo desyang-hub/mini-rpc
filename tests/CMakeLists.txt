@@ -17,15 +17,15 @@ add_executable(test_net
 test_net.cc
 )
 
+add_executable(test_security
+    test_security.cc
+)
+
 # 链接库和gtest
 target_link_libraries(test_common 
     common
     gtest 
     gtest_main
-    # GTest::gtest 
-    # GTest::gtest_main
-    # GTest::gmock
-    # GTest::gmock_main
 )
 
 target_link_libraries(test_protocol 
@@ -33,10 +33,6 @@ target_link_libraries(test_protocol
     common
     gtest 
     gtest_main
-    # GTest::gtest 
-    # GTest::gtest_main
-    # GTest::gmock
-    # GTest::gmock_main
 )
 
 target_link_libraries(test_core
@@ -45,10 +41,6 @@ target_link_libraries(test_core
     common
     gtest 
     gtest_main
-    # GTest::gtest 
-    # GTest::gtest_main
-    # GTest::gmock
-    # GTest::gmock_main
 )
 
 
@@ -59,10 +51,13 @@ target_link_libraries(test_net
     common
     gtest 
     gtest_main
-    # GTest::gtest 
-    # GTest::gtest_main
-    # GTest::gmock
-    # GTest::gmock_main
+)
+
+target_link_libraries(test_security
+    protocol
+    common
+    gtest 
+    gtest_main
 )
 
 # 添加测试
@@ -70,3 +65,4 @@ add_test(NAME test_common_run COMMAND test_common)
 add_test(NAME test_protocol_run COMMAND test_protocol)
 add_test(NAME test_core_run COMMAND test_core)
 add_test(NAME test_net_run COMMAND test_net)
+add_test(NAME test_security_run COMMAND test_security)

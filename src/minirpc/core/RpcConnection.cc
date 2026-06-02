@@ -191,11 +191,10 @@ std::string RpcConnection::targetAddress() const {
 }
 
 void RpcConnection::close() {
-    if (closed_) {
+    if (closed_.exchange(true)) {
         return;
     }
 
-    closed_ = true;
     healthy_ = false;
 
     if (sock_ >= 0) {

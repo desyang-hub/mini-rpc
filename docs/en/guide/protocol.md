@@ -34,7 +34,7 @@ mini-rpc uses a custom binary protocol for communication. The protocol header is
 | `compress` | `uint8_t` | 1 | Compression: `0`=None |
 | `request_id` | `uint64_t` | 8 | Unique request identifier for request-response correlation |
 | `body_len` | `uint32_t` | 4 | Length of the body (data payload) |
-| `checksum` | `uint32_t` | 4 | CRC32 checksum computed over the body |
+| `checksum` | `uint32_t` | 4 | CRC32 checksum computed over the service name and body to prevent tampering |
 | `srv_name_len` | `uint32_t` | 4 | Length of the service name |
 | `code` | `uint8_t` | 1 | Status code: `0`=Success, others are error codes |
 
@@ -53,10 +53,14 @@ mini-rpc uses a custom binary protocol for communication. The protocol header is
 
 ## CRC32 Checksum
 
-The CRC32 checksum is computed over the **Body** portion:
+The CRC32 checksum is computed over the **ServiceName + Body** portion to prevent service name tampering:
 
 ```cpp
-uint32_t checksum = minirpc::simple_crc32(body.data(), body.size());
+// Compute CRC32 over srv_name + body
+Bytes crc_input(header.srv_name_len + header.body_len);
+memcpy(crc_input.data(), srvName.data(), header.srv_name_len);
+memcpy(crc_input.data() + header.srv_name_len, body.data(), header.body_len);
+uint32_t checksum = minirpc::simple_crc32(crc_input.data(), crc_input.size());
 ```
 
 The server validates the magic number and CRC32 upon receiving a packet. Invalid packets are discarded.

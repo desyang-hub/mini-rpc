@@ -62,8 +62,11 @@ public:
         // bodyLen
         header.body_len = body.size();
 
-        // 计算checksum
-        header.checksum = simple_crc32(reinterpret_cast<const uint8_t*>(body.data()), header.body_len);
+        // 计算checksum（覆盖srv_name + body，防止srv_name被篡改）
+        Bytes crc_input(header.srv_name_len + header.body_len);
+        memcpy(crc_input.data(), srvName.data(), header.srv_name_len);
+        memcpy(crc_input.data() + header.srv_name_len, body.data(), header.body_len);
+        header.checksum = simple_crc32(crc_input.data(), crc_input.size());
 
         std::vector<uint8_t> packet(sizeof(header) + header.srv_name_len + header.body_len);
 
