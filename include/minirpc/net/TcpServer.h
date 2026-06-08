@@ -1,7 +1,7 @@
 #pragma once
 
 #include "minirpc/common/nonecopyable.h"
-#include "minirpc/common/timeStamp.h"
+#include "minirpc/common/TimeStamp.h"
 #include "minirpc/common/ThreadPool.h"
 #include "minirpc/net/Conn.h"
 #include "minirpc/net/Channel.h"

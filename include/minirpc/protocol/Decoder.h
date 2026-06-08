@@ -111,6 +111,44 @@ public:
         constexpr int header_len = sizeof(ProtocolHeader);
         return header_len + headerPtr->srv_name_len + headerPtr->body_len;
     }
+
+
+    /// @brief 对数据进行解码
+    /// @param data 数据首地址
+    /// @param len 数据长度
+    /// @return -1 | 0 | > 0 => error, unfinish, accept
+    static int Decode(void* data, int len) {
+        int header_len = sizeof(ProtocolHeader);
+        // 头长度是否足够
+        if (len < header_len) {
+            return UN_FINISH;
+        }
+
+        // 头部解析
+        ProtocolHeader* headerPtr = reinterpret_cast<ProtocolHeader*>(data);
+
+        // 检验魔数
+        if (headerPtr->magic != MAGIC_NUMBER) {
+            // 魔数校验不匹配
+            return ERR;
+        }
+
+        // 计算包长度
+        int pkg_len = header_len + headerPtr->srv_name_len + headerPtr->body_len;
+
+        // 整个数据包完整性验证
+        if (pkg_len + 4 > len) { // 末尾四字节包含check_num
+            return UN_FINISH;
+        }
+
+        // CRC整个数据包校验
+        if (simple_crc32(data, pkg_len) != *(reinterpret_cast<uint32_t*>((char*)data + pkg_len))) {
+            // crc数据校验不通过，数据出错，这个应该要触发重传才对
+            return ERR;
+        }
+
+        return pkg_len + 4;
+    }
 };
 
 } // namespace minirpc

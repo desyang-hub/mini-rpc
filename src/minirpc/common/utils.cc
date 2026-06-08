@@ -6,8 +6,9 @@
 namespace minirpc
 {
 
-uint32_t simple_crc32(const uint8_t *data, size_t len)
+uint32_t simple_crc32(const void* ptr, size_t len)
 {
+    const char* data = reinterpret_cast<const char*>(ptr);
     if (data == nullptr) {
         throw std::invalid_argument("simple_crc32 input data is nullptr");
     }

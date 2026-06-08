@@ -6,12 +6,13 @@
 namespace minirpc
 {
     
-
-
-
-class RpcException : public std::runtime_error {
+class RpcException : public std::exception {
+private:
+    const std::string msg_;
 public:
-    RpcException(const std::string& msg) : std::runtime_error(msg) {}
+    RpcException(const std::string& msg);
+
+    const char* what() const noexcept override;
 };
 
 

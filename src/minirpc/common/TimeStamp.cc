@@ -1,4 +1,4 @@
-#include "minirpc/common/timeStamp.h"
+#include "minirpc/common/TimeStamp.h"
 
 #include <time.h>
 
@@ -20,7 +20,7 @@ std::string TimeStamp::toString() const {
 
     snprintf(buf, 128, "%04d/%02d/%02d %02d:%02d:%02d", ltm->tm_year + 1900, ltm->tm_mon + 1, ltm->tm_mday, ltm->tm_hour, ltm->tm_min, ltm->tm_sec);
 
-    return std::string(buf);
+    return buf;
 }
 
 

@@ -13,8 +13,6 @@
 
 namespace minirpc
 {
-
-
     
 namespace
 {
@@ -32,18 +30,18 @@ private:
     std::condition_variable condition_;
 
 public:
-    inline explicit ThreadPool(const int pool_size = DEFAULT_THREAD_POOL_SIZE);
-    inline ~ThreadPool();
+    explicit ThreadPool(const int pool_size = DEFAULT_THREAD_POOL_SIZE);
+    ~ThreadPool();
 
     template<class F, class ...Args>
-    inline auto enqueue(F&& f, Args&& ...args) -> std::future<typename std::result_of<F(Args...)>::type>;
+    auto enqueue(F&& f, Args&& ...args) -> std::future<typename std::result_of<F(Args...)>::type>;
 
     // 禁用拷贝
     ThreadPool(const ThreadPool&) = delete;
     ThreadPool& operator=(const ThreadPool&) = delete;
 };
 
-ThreadPool::ThreadPool(const int pool_size) : is_running_(true)
+inline ThreadPool::ThreadPool(const int pool_size) : is_running_(true)
 {
     workers_.reserve(pool_size);
     // 启用多个线程，用于执行提交的任务
@@ -80,7 +78,7 @@ ThreadPool::ThreadPool(const int pool_size) : is_running_(true)
     }
 }
 
-ThreadPool::~ThreadPool()
+inline ThreadPool::~ThreadPool()
 {
     {
         std::unique_lock<std::mutex> lock(mutex_);
@@ -96,7 +94,7 @@ ThreadPool::~ThreadPool()
 }
 
 template<class F, class ...Args>
-auto ThreadPool::enqueue(F&& f, Args&& ...args) -> std::future<typename std::result_of<F(Args...)>::type> {
+inline auto ThreadPool::enqueue(F&& f, Args&& ...args) -> std::future<typename std::result_of<F(Args...)>::type> {
     using return_type = typename std::result_of<F(Args...)>::type;
 
     // 创建一个异步任务

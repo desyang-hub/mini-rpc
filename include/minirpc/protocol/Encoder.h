@@ -81,6 +81,39 @@ public:
 
         return packet;
     }
+
+    // 编码，将必要的数据进行封装
+    static Bytes Encode(const char* name, const void* data, size_t len, uint8_t type = MSG_REQUEST) {
+        ProtocolHeader header;
+        int header_len = sizeof(header);
+
+        // magic
+        header.magic = MAGIC_NUMBER;
+
+        // 消息类型
+        header.type = type;
+
+        // version
+        header.version = 1;
+
+        // srvNameLen
+        header.srv_name_len = strlen(name);
+
+        // bodyLen
+        header.body_len = len;
+
+        size_t pkg_len = header_len + header.srv_name_len + len;
+
+        // 计算checksum（覆盖srv_name + body，防止srv_name被篡改）
+        Bytes crc_input(pkg_len + 4); // 剩下4字节是用于存放check_num
+        memcpy(crc_input.data(), &header, header_len);
+        memcpy(crc_input.data() + header_len, name, header.srv_name_len);
+        memcpy(crc_input.data() + header_len + header.srv_name_len, data, len);
+        uint32_t check_num = simple_crc32(crc_input.data(), pkg_len);
+        memcpy(crc_input.data() + pkg_len, &check_num, 4);
+
+        return crc_input;
+    }
 };
 
 

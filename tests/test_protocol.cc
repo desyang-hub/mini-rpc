@@ -73,6 +73,30 @@ TEST(ProtocolTest, EncodeDecodeVeryLargeBody) {
     EXPECT_EQ(body, decoded_body);
 }
 
+TEST(ProtocolTest1, EncodeDecodeVeryLargeBody1) {
+    std::string srvName = "TestService.veryLarge";
+    std::string body(10, 'A');  // 1MB
+    // Bytes encode_bytes = Encoder::Encode(srvName, body);
+
+    Bytes encode_bytes = Encoder::Encode(srvName.c_str(), body.c_str(), body.size(), MSG_REQUEST);
+
+    int status = Decoder::Decode(encode_bytes.data(), encode_bytes.size());
+
+    EXPECT_TRUE(status > 0);
+
+    uint8_t* data = encode_bytes.data();
+
+    ProtocolHeader* header = reinterpret_cast<ProtocolHeader*>(data);
+
+    std::string srvName_decode((char*)data + sizeof(ProtocolHeader), header->srv_name_len);
+
+    EXPECT_EQ(srvName, srvName_decode);
+
+    std::string decoded_body_str((char*)header + sizeof(ProtocolHeader) + header->srv_name_len, header->body_len);
+
+    EXPECT_EQ(body, decoded_body_str);
+}
+
 TEST(ProtocolTest, EncodeDecodeMultiWordBody) {
     std::string srvName = "TestService.multi";
     std::string body = "word1 word2 word3 中文测试";

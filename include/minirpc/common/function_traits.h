@@ -78,8 +78,8 @@ struct function_traits<R (*)(Args...)>
 // };
 
 // 3. 处理成员函数 (const) - Lambda 的 operator() 通常是 const 的
-template <typename ClassType, typename R, typename... Args>
-struct function_traits<R (ClassType::*)(Args...)>
+template <typename C, typename R, typename... Args>
+struct function_traits<R (C::*)(Args...)>
 {
     using return_type = R;
     using args_tuple = std::tuple<std::decay_t<Args>...>;
@@ -99,8 +99,8 @@ struct function_traits<R (ClassType::*)(Args...)>
 // };
 
 // 2. 处理成员函数 (非 const)
-template <typename ClassType, typename R, typename... Args>
-struct function_traits<R (ClassType::*)(Args...) const>
+template <typename C, typename R, typename... Args>
+struct function_traits<R (C::*)(Args...) const>
 {
     using return_type = R;
     // 使用 std::decay_t 去除引用和 const，确保得到纯类型

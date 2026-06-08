@@ -52,10 +52,11 @@ FetchContent_MakeAvailable(nacos_cpp)
 # 创建静态库
 add_library(common STATIC
     src/minirpc/common/logger.cc
-    src/minirpc/common/timeStamp.cc
+    src/minirpc/common/TimeStamp.cc
     src/minirpc/common/utils.cc
     src/minirpc/common/nacos_config.cc
     src/minirpc/common/Random.cc
+    src/minirpc/common/RpcException.cc
 )
 # 创建动态库
 # add_library(protocol SHARED 
