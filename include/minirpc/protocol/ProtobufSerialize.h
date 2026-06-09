@@ -3,6 +3,8 @@
 #include <google/protobuf/message.h>
 #include <minirpc/common/logger.h>
 
+#include <cstdint>
+
 namespace minirpc
 {
 
@@ -35,13 +37,29 @@ public:
     // 反序列化接口
     /// @param bytes: 序列化后的数据
     /// @return 还原后的数据
+    // template<class ProtobufMessageInherit>
+    // ProtobufMessageInherit deserialization(const std::string& serializeStr) {
+    //     static_assert(std::is_base_of_v<google::protobuf::Message, ProtobufMessageInherit>, "ProtobufMessageInherit must inherit from google::protobuf::Message");
+
+    //     ProtobufMessageInherit obj;
+    //     if (!obj.ParseFromString(serializeStr)) {
+    //         LOG_ERROR("Protobuf Deserial failed: %s", serializeStr.c_str());
+    //         throw std::runtime_error("Protobuf deserialization failed");
+    //     }
+    //     return obj;
+    // }
+
+
+        // 反序列化接口
+    /// @param bytes: 序列化后的数据
+    /// @return 还原后的数据
     template<class ProtobufMessageInherit>
-    ProtobufMessageInherit deserialization(const std::string& serializeStr) {
+    ProtobufMessageInherit deserialization(const void* data, size_t len) {
         static_assert(std::is_base_of_v<google::protobuf::Message, ProtobufMessageInherit>, "ProtobufMessageInherit must inherit from google::protobuf::Message");
 
         ProtobufMessageInherit obj;
-        if (!obj.ParseFromString(serializeStr)) {
-            LOG_ERROR("Protobuf Deserial failed: %s", serializeStr.c_str());
+        if (!obj.ParseFromArray(data, len)) {
+            LOG_ERROR("Protobuf Deserial failed: %s", std::string((const char*)data, len).c_str());
             throw std::runtime_error("Protobuf deserialization failed");
         }
         return obj;

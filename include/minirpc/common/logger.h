@@ -4,7 +4,7 @@
  * @Author       : desyang
  * @Date         : 2026-03-25 20:05:54
  * @LastEditors  : desyang
- * @LastEditTime : 2026-06-08 09:58:52
+ * @LastEditTime : 2026-06-09 11:51:06
 **/
 #pragma once
 
@@ -29,7 +29,7 @@ minirpc::Logger::GetInstance().enable_async_log_write()
         char buf[1024];                     \
         snprintf(buf, 1024, format, ##__VA_ARGS__);\
         minirpc::Logger::GetInstance().log(buf, minirpc::INFO);     \
-    };                             \
+    };
 
 
 #define LOG_ERROR(format, ...) \

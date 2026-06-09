@@ -61,11 +61,7 @@ public:
     void registerService(const std::string& className);
 
     static const std::vector<std::string>& GetServices() {
-        return GetInstance().getServices();
-    }
-
-    const std::vector<std::string>& getServices() const {
-        return services_;
+        return GetInstance().services_;
     }
 
     template <class Func>
@@ -119,7 +115,7 @@ public:
 // 辅助模板函数
 template<typename Class, typename MethodPtr>
 inline void bind_rpc_method_impl(const std::string& name, MethodPtr method_ptr) {
-    using traits = minirpc::function_traits<MethodPtr>;
+    using traits =function_traits<MethodPtr>;
     using return_type = typename traits::return_type;
 
     auto& instance = Class::GetInstance();
@@ -127,7 +123,7 @@ inline void bind_rpc_method_impl(const std::string& name, MethodPtr method_ptr) 
 
     if constexpr (traits::is_single_arg) {
         using arg_type = typename traits::first_arg;
-        minirpc::RpcServer::Bind(
+        RpcServer::Bind(
             name, 
             [instancePtr, method_ptr](arg_type arg) -> return_type {
                 if constexpr (std::is_void_v<return_type>) {

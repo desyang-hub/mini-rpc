@@ -72,5 +72,4 @@ struct ProtocolHeader
 static_assert(sizeof(ProtocolHeader) == 27, "Header size mismatch");
 
 
-
 } // namespace minirpc

@@ -5,3 +5,5 @@ add_subdirectory(protobuf_demo)
 add_subdirectory(config)
 
 add_subdirectory(simple_protobuf)
+
+add_subdirectory(simple_plus)

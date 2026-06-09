@@ -2,6 +2,7 @@
 
 #include "minirpc/protocol/JsonSerialize.h"
 #include "minirpc/protocol/ProtobufSerialize.h"
+#include "minirpc/common/RpcException.h"
 
 #include <google/protobuf/message.h>
 
@@ -35,11 +36,11 @@ private:
     }
 
     template<class T>
-    T deserialization(const std::string& data) {
+    T deserialization(const void* data, size_t len) {
         if constexpr (std::is_base_of_v<google::protobuf::Message, T>) {
-            return protobuf_serializer_.deserialization<T>(data);
+            return protobuf_serializer_.deserialization<T>(data, len);
         } else {
-            return json_serializer_.deserialization<T>(data);
+            return json_serializer_.deserialization<T>(data, len);
         }
     }
 
@@ -51,7 +52,12 @@ public:
 
     template<class T>
     static T Deserialization(const std::string& data) {
-        return GetInstance().deserialization<T>(data);
+        return GetInstance().deserialization<T>(data.c_str(), data.size());
+    }
+
+    template<class T>
+    static T Deserialization(const void* data, size_t len) {
+        return GetInstance().deserialization<T>(data, len);
     }
 };
 
