@@ -11,6 +11,10 @@ message(STATUS "Build minirpc: ${MINIRPC_VERSION}")
 set(CMAKE_CXX_STANDARD 17) # equal -std=c++17
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+option(BUILD_EXAMPLES OFF)
+
+set(LIB_TYPE "")
+
 # set output save path
 # set(LIBRARY_OUTPUT_PATH ${CMAKE_SOURCE_DIR}/lib)
 # set(EXECUTABLE_OUTPUT_PATH ${CMAKE_SOURCE_DIR}/bin)
@@ -27,7 +31,7 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(nlohmann_json)
 
 add_library(nlohmann_json_interface INTERFACE)
-target_include_directories(nlohmann_json_interface INTERFACE 
+target_include_directories(nlohmann_json_interface INTERFACE
     ${nlohmann_json_SOURCE_DIR}/include)
 #end =============== dependencies ===============
 
@@ -40,17 +44,14 @@ FetchContent_Declare(
     # 修复 upstream: CMAKE_SOURCE_DIR → CMAKE_CURRENT_SOURCE_DIR
     # 当 FetchContent 把 nacos_cpp 作为子目录引入时，CMAKE_SOURCE_DIR 指向顶层项目目录
     # 导致 install(DIRECTORY ${CMAKE_SOURCE_DIR}/include/ DESTINATION include/nacos ...)
-    # 错误地把主项目的头文件安装到 include/nacos/ 下（含 minirpc/ 子目录）
+    # 错误地把主项目的头文件安装到 include/nacos/ 下 (含 minirpc/子目录)
     PATCH_COMMAND    /usr/bin/sed -i "s/CMAKE_SOURCE_DIR/CMAKE_CURRENT_SOURCE_DIR/g" ${CMAKE_CURRENT_BINARY_DIR}/_deps/nacos_cpp-src/CMakeLists.txt
 )
 FetchContent_MakeAvailable(nacos_cpp)
 
-
-
 # 编译链接库
 #start=============== common ===============
-# 创建静态库
-add_library(common STATIC
+add_library(common ""
     src/minirpc/common/logger.cc
     src/minirpc/common/TimeStamp.cc
     src/minirpc/common/utils.cc
@@ -58,12 +59,8 @@ add_library(common STATIC
     src/minirpc/common/Random.cc
     src/minirpc/common/RpcException.cc
 )
-# 创建动态库
-# add_library(protocol SHARED 
-#     source1.cpp 
-#     source2.cpp)
 
-# 为common添加包含目录
+# 为 common 添加包含目录
 target_include_directories(common PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>  # 安装后头文件会放到 include 目录
@@ -73,48 +70,36 @@ target_include_directories(common PUBLIC
 
 #start=============== core ===============
 # 创建静态库
-add_library(core STATIC
+add_library(core ${LIB_TYPE}
     src/minirpc/core/RpcServer.cc
     src/minirpc/core/RpcClient.cc
-    src/minirpc/core/RpcConnection.cc
-    src/minirpc/core/RpcConnectionPool.cc
-    src/minirpc/core/TcpConnectionPoolFactory.cc
-    src/minirpc/core/utils.cc
 )
-# 创建动态库
-# add_library(protocol SHARED 
-#     source1.cpp 
-#     source2.cpp)
 
-# 为core添加包含目录
+# 为 core 添加包含目录
 target_include_directories(core PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>  # 安装后头文件会放到 include 目录
 )
-target_link_libraries(core PRIVATE 
+target_link_libraries(core PRIVATE
     net
     protocol
     common
+    nacos-cli # 静态链接库
+    muduo_net
+    muduo_base
 )
 #end =============== core ===============
 
 #start=============== net ===============
 # 创建静态库
-add_library(net STATIC 
-    src/minirpc/net/EventLoop.cc
-    src/minirpc/net/Poller.cc
-    src/minirpc/net/Channel.cc
-    src/minirpc/net/DefaultPoller.cc
-    src/minirpc/net/EpollPoller.cc
+add_library(net ${LIB_TYPE}
+    src/minirpc/net/ConnectionManager.cc
+    src/minirpc/net/EndPoint.cc
+    src/minirpc/net/TcpClient.cc
     src/minirpc/net/TcpServer.cc
-    src/minirpc/net/utils.cc
 )
-# 创建动态库
-# add_library(protocol SHARED 
-#     source1.cpp 
-#     source2.cpp)
 
-# 为net添加包含目录
+# 为 net 添加包含目录
 target_include_directories(net PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>  # 安装后头文件会放到 include 目录
@@ -122,32 +107,27 @@ target_include_directories(net PUBLIC
     ${nacos_cpp_SOURCE_DIR}/include
 )
 
-# target_link_directories(net PRIVATE
-#     ${CMAKE_CURRENT_SOURCE_DIR}/lib
-# )
-
-
-target_link_libraries(net PRIVATE 
+target_link_libraries(net PRIVATE
     protocol
     common
     nacos-cli # 静态链接库
-    curl
-    z
+    muduo_net
+    muduo_base
 )
 #end =============== net ===============
 
 
 #start=============== protocol ===============
 # 创建静态库
-add_library(protocol STATIC 
+add_library(protocol ${LIB_TYPE}
     src/minirpc/protocol/Serialize.cc
 )
 # 创建动态库
-# add_library(protocol SHARED 
-#     source1.cpp 
+# add_library(protocol SHARED
+#     source1.cpp
 #     source2.cpp)
 
-# 为protocol添加包含目录
+# 为 protocol 添加包含目录
 target_include_directories(protocol PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>  # 安装后头文件会放到 include 目录
@@ -161,22 +141,25 @@ target_link_libraries(protocol PUBLIC
 
 #start=============== main ===============
 # 添加可执行文件
-add_executable(minirpc_main
-    src/main.cc
-)
+# add_executable(minirpc_main
+#     src/main.cc
+# )
 
-# 配置链接库
-target_link_libraries(minirpc_main PRIVATE
-    protocol
-    core
-    net
-    common
-)
+# # 配置链接库
+# target_link_libraries(minirpc_main PRIVATE
+#     protocol
+#     core
+#     net
+#     common
+# )
 #end =============== main ===============
 
 
+
 #start =============== example ===============
-add_subdirectory(examples)
+if(BUILD_EXAMPLES)
+    add_subdirectory(examples)
+endif()
 #end =============== example ===============
 
 
@@ -188,7 +171,7 @@ option(BUILD_TESTS "Build tests" ON)
 if(BUILD_TESTS)
     enable_testing()
 
-    # 通过 FetchContent 获取 GTest（跨平台，CI 无需手动安装）
+    # 通过 FetchContent 获取 GTest(跨平台，CI 无需手动安装)
     include(FetchContent)
     FetchContent_Declare(
         googletest
@@ -204,26 +187,26 @@ endif()
 
 
 # ================== Export Configuration ==================
-# 安装头文件和库（已有，无需修改）
-install(TARGETS common core net protocol nlohmann_json_interface
-    EXPORT minirpc
-    ARCHIVE DESTINATION lib
-    LIBRARY DESTINATION lib
-    RUNTIME DESTINATION bin
-    INCLUDES DESTINATION include
-)
+# 安装头文件和库 (已有，无需修改)
+# install(TARGETS common core net protocol nlohmann_json_interface
+#     EXPORT minirpc
+#     ARCHIVE DESTINATION lib
+#     LIBRARY DESTINATION lib
+#     RUNTIME DESTINATION bin
+#     INCLUDES DESTINATION include
+# )
 
-install(DIRECTORY include/ DESTINATION include)
+# install(DIRECTORY include/ DESTINATION include)
 
-# 安装 nlohmann_json 的头文件（重要！）
-install(DIRECTORY ${nlohmann_json_SOURCE_DIR}/include/ 
-    DESTINATION include
-    FILES_MATCHING PATTERN "*.hpp")
+# # 安装 nlohmann_json 的头文件 (重要!)
+# install(DIRECTORY ${nlohmann_json_SOURCE_DIR}/include/
+#     DESTINATION include
+#     FILES_MATCHING PATTERN "*.hpp")
 
-# ================== CPack Configuration ==================
-# 配置打包工具 (生成 .deb, .rpm, .zip 等)
-include(CPack)
-set(CPACK_GENERATOR "ZIP") # 开发阶段先用 zip
-set(CPACK_PACKAGE_NAME "minirpc")
-set(CPACK_PACKAGE_VERSION ${PROJECT_VERSION})
-set(CPACK_INCLUDE_TOPLEVEL_DIRECTORY OFF) # 避免生成多余的文件夹
+# # ================== CPack Configuration ==================
+# # 配置打包工具 (生成 .deb, .rpm, .zip 等)
+# include(CPack)
+# set(CPACK_GENERATOR "ZIP") # 开发阶段先用 zip
+# set(CPACK_PACKAGE_NAME "minirpc")
+# set(CPACK_PACKAGE_VERSION ${PROJECT_VERSION})
+# set(CPACK_INCLUDE_TOPLEVEL_DIRECTORY OFF) # 避免生成多余的文件夹

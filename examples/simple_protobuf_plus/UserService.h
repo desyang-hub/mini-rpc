@@ -1,8 +1,8 @@
 #pragma once
 
 
-#include "minirpc/rpc_core/RpcServer.h"
-#include "minirpc/rpc_core/RpcClient.h"
+#include "minirpc/core/RpcServer.h"
+#include "minirpc/core/RpcClient.h"
 
 #include "user.pb.h"
 

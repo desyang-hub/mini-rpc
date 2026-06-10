@@ -9,7 +9,7 @@ execute_process(
 )
 
 if(NOT OUTPUT_PATH)
-    message(WARNING "Could not find 'output/include' directory. Trying system Protobuf.")
+    message(INFO "Could not find 'output/include' directory. Trying system Protobuf.")
 else()
     set(CMAKE_PREFIX_PATH ${OUTPUT_PATH})
 endif()

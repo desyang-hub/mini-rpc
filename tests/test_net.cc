@@ -12,7 +12,6 @@
 #include <atomic>
 
 #include "minirpc/common/Buffer.h"
-#include "minirpc/net/utils.h"
 #include "minirpc/core/RpcClient.h"
 #include "minirpc/protocol/Encoder.h"
 #include "minirpc/protocol/Decoder.h"

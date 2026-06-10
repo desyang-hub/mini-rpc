@@ -3,8 +3,8 @@
 // #include "minirpc/core/RpcServer.h"
 // #include "minirpc/core/RpcClient.h"
 
-#include "minirpc/rpc_core/RpcServer.h"
-#include "minirpc/rpc_core/RpcClient.h"
+#include "minirpc/core/RpcServer.h"
+#include "minirpc/core/RpcClient.h"
 
 #include <iostream>
 #include <unordered_map>

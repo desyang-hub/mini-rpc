@@ -16,62 +16,9 @@
     using MethodType_##Method = decltype(&Class::Method); \
     using traits_##Method = minirpc::function_traits<MethodType_##Method>; \
     using ReturnType_##Method = typename traits_##Method::return_type; \
-    using ArgsTuple_##Method = typename traits_##Method::args_tuple; \
-    static constexpr size_t arity_##Method = traits_##Method::arity; \
-    \
-    /* 辅助类型：void 替换为 int */ \
-    using RetType_##Method = typename std::conditional< \
-        std::is_void_v<ReturnType_##Method>, \
-        int, \
-        ReturnType_##Method \
-    >::type; \
-    \
     template<typename... Args> \
     ReturnType_##Method Method(Args&&... args) { \
-        /* 参数个数必须匹配 */ \
-        static_assert(sizeof...(Args) == arity_##Method, "Argument count mismatch for method " #Method); \
-        \
-        /* 类型兼容性检查 */ \
-        static_assert(std::is_convertible_v<std::tuple<std::decay_t<Args>...>, ArgsTuple_##Method>, "Parameter types mismatch for method " #Method); \
-        \
-        std::string srvName = #Class "." #Method; \
-        auto& client = minirpc::RpcClient::GetInstance(); \
-        \
-        if constexpr (arity_##Method == 1) { \
-            /* 单参数：直接取第一个参数（无需 tuple） */ \
-            auto&& arg = []<typename T>(T&& t) -> T&& { return std::forward<T>(t); }(args...); \
-            \
-            if constexpr (std::is_void_v<ReturnType_##Method>) { \
-                uint8_t code = client.call(srvName, arg); \
-                if (code != minirpc::SUCCESS) { \
-                    throw minirpc::RpcException("RPC Call Failed: err_code=" + std::to_string(code)); \
-                } \
-            } else { \
-                RetType_##Method ret_val; \
-                uint8_t code = client.call(srvName, arg, ret_val); \
-                if (code != minirpc::SUCCESS) { \
-                    throw minirpc::RpcException("RPC Call Failed: err_code=" + std::to_string(code)); \
-                } \
-                return static_cast<ReturnType_##Method>(ret_val); \
-            } \
-        } else { \
-            /* 多参数：打包成 tuple */ \
-            ArgsTuple_##Method args_tuple = std::make_tuple(std::forward<Args>(args)...); \
-            \
-            if constexpr (std::is_void_v<ReturnType_##Method>) { \
-                uint8_t code = client.call(srvName, args_tuple); \
-                if (code != minirpc::SUCCESS) { \
-                    throw minirpc::RpcException("RPC Call Failed: err_code=" + std::to_string(code)); \
-                } \
-            } else { \
-                RetType_##Method ret_val; \
-                uint8_t code = client.call(srvName, args_tuple, ret_val); \
-                if (code != minirpc::SUCCESS) { \
-                    throw minirpc::RpcException("RPC Call Failed: err_code=" + std::to_string(code)); \
-                } \
-                return static_cast<ReturnType_##Method>(ret_val); \
-            } \
-        } \
+        return minirpc::RpcClient::GetInstance().Call<ReturnType_##Method>(#Class, #Class "." #Method, std::forward<Args>(args)...); \
     }
 
 
@@ -137,5 +84,5 @@
     public: \
         Class##_Stub() {minirpc::RpcClient::GetInstance();} \
         /* 展开具体的方法 */ \
-        _RPC_STUB_ALL(Class, __VA_ARGS__) }; private: \
+        _RPC_STUB_ALL(Class, __VA_ARGS__) }; private:
     

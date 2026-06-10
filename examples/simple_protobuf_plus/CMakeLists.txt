@@ -51,7 +51,9 @@ target_include_directories(server_protobuf_plus
 # === 7. 链接 Protobuf 库（否则会链接错误）===
 target_link_libraries(client_protobuf_plus 
     ${Protobuf_LIBRARIES}
+    core
     net
+    common
     protocol
     protobuf
     nlohmann_json_interface
@@ -62,7 +64,9 @@ target_link_libraries(client_protobuf_plus
 target_link_libraries(server_protobuf_plus 
     nacos-cli
     ${Protobuf_LIBRARIES}
+    core
     net
+    common
     protocol
     nlohmann_json_interface
     muduo_net

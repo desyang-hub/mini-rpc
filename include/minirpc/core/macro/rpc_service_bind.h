@@ -33,7 +33,7 @@
 // 2. 单个方法的注册逻辑
 #define _RPC_BIND_METHOD(Class, Method) \
 do { \
-    minirpc::bind_rpc_method_impl<Class>(#Class "." #Method, &Class::Method); \
+    minirpc::bind_rpc_method_impl<Class>(#Class, #Class "." #Method, &Class::Method); \
 } while (0)
 
 // 3. 定义不同参数数量的实现宏
@@ -69,7 +69,6 @@ do { \
 // 关键修改：增加中间层强制展开 PP_NARG
 
 #define _RPC_BIND_ALL(Class, ...) \
-    minirpc::RpcServer::RegisterService(#Class);   /*这里需要添加逻辑 关于将类名注册到服务*/ \
     _RPC_BIND_DISPATCH(_RPC_BIND_IMPL_, Class, __VA_ARGS__)
 
 // 第一层：接收参数，调用计数器
@@ -95,25 +94,6 @@ do { \
  * @note 该宏必须在类定义域内使用
  */
 #define RPC_SERVICE_BIND(Class, ...)                           \
-private:                                                       \
-    Class()                                                    \
-    {                                                          \
-        /*std::cout << #Class " Init" << std::endl;*/              \
-    }                                                          \
-    /* 核心修改：增加一个静态启动器类 */                       \
-    class _AutoInit                                            \
-    {                                                          \
-    public:                                                    \
-        _AutoInit()                                            \
-        {                                                      \
-            Class::Init();                                     \
-        }                                                      \
-    };                                                         \
-                                                               \
-    /* 5. 定义一个全局静态变量，利用其构造函数自动触发 Init */ \
-    /* 注意：这里利用宏拼接生成唯一的变量名，防止命名冲突 */   \
-    static _AutoInit _auto_init_instance_##Class;              \
-                                                               \
 public:                                                        \
     static Class &GetInstance()                                \
     {                                                          \
@@ -124,6 +104,7 @@ public:                                                        \
     static void Init()                                         \
     {                                                          \
         Class::GetInstance();                                  \
+        minirpc::RpcServer::GetInstance().addServiceInstance(#Class); \
         _RPC_BIND_ALL(Class, __VA_ARGS__);                     \
     }                                                          \
                                                                \
@@ -143,9 +124,8 @@ private:
 // 在Class.cc文件中使用，注册方法到RpcServer
 // ===========================================================
 #define RPC_SERVICE_REGISTER(Class) \
-    namespace                                                                        \
-    {                                                                                \
-        /* 这里使用了 RPC_CONCAT，它会被正确展开为 _AutoInit_UserService */          \
+    namespace {                                                                       \
+        /* 这里使用了 RPC_CONCAT，它会被正确展开为 _AutoInit_UserService */             \
         struct RPC_CONCAT(_AutoInit_, Class)                                         \
         {                                                                            \
             RPC_CONCAT(_AutoInit_, Class)()                                          \
@@ -153,6 +133,9 @@ private:
                 Class::Init();                                                       \
             }                                                                        \
         };                                                                           \
-        /* 这里同理，展开为 static _AutoInit_UserService g_auto_init_UserService; */ \
-        static RPC_CONCAT(_AutoInit_, Class) RPC_CONCAT(g_auto_init_, Class);}
-    
+        /* 这里同理，展开为 static _AutoInit_UserService g_auto_init_UserService; */  \
+        static RPC_CONCAT(_AutoInit_, Class) RPC_CONCAT(g_auto_init_, Class);        \
+    }
+
+// 计划添加，为服务类添加groupName和clusterName
+// #define RPC_SERVICE_REGISTER(Class, GroupName) \

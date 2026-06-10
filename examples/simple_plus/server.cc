@@ -1,4 +1,4 @@
-#include "minirpc/rpc_core/RpcServer.h"
+#include "minirpc/core/RpcServer.h"
 
 #include <iostream>
 

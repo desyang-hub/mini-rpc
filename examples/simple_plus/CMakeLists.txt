@@ -4,7 +4,7 @@ add_executable(client_p
 
 target_link_libraries(client_p PRIVATE
     protocol
-    # core
+    core
     net
     common
     nlohmann_json_interface
@@ -25,7 +25,7 @@ add_executable(server_p
 target_link_libraries(server_p PRIVATE
     nacos-cli
     protocol
-    # core
+    core
     net
     common
     nlohmann_json_interface
