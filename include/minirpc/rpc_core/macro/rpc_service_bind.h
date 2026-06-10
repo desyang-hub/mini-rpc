@@ -104,6 +104,7 @@ public:                                                        \
     static void Init()                                         \
     {                                                          \
         Class::GetInstance();                                  \
+        minirpc::RpcServer::GetInstance().addServiceInstance(#Class); \
         _RPC_BIND_ALL(Class, __VA_ARGS__);                     \
     }                                                          \
                                                                \
@@ -123,8 +124,7 @@ private:
 // 在Class.cc文件中使用，注册方法到RpcServer
 // ===========================================================
 #define RPC_SERVICE_REGISTER(Class) \
-    namespace                                                                        \
-    {                                                                                \
+    namespace {                                                                       \
         /* 这里使用了 RPC_CONCAT，它会被正确展开为 _AutoInit_UserService */             \
         struct RPC_CONCAT(_AutoInit_, Class)                                         \
         {                                                                            \
@@ -136,4 +136,6 @@ private:
         /* 这里同理，展开为 static _AutoInit_UserService g_auto_init_UserService; */  \
         static RPC_CONCAT(_AutoInit_, Class) RPC_CONCAT(g_auto_init_, Class);        \
     }
-    
+
+// 计划添加，为服务类添加groupName和clusterName
+// #define RPC_SERVICE_REGISTER(Class, GroupName) \

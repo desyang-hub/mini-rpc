@@ -4,7 +4,7 @@
  * @Author       : desyang
  * @Date         : 2026-06-08 15:18:23
  * @LastEditors  : desyang
- * @LastEditTime : 2026-06-09 17:27:57
+ * @LastEditTime : 2026-06-10 10:32:09
 **/
 #pragma once
 
@@ -26,6 +26,8 @@
 
 #include <muduo/net/InetAddress.h>
 #include <atomic>
+#include <Nacos.h>
+#include <list>
 
 // rpc client 需要有哪些功能
 // 1. 通过一个宏用于服务函数，这个服务函数无需实现，只需要声明即可
@@ -47,9 +49,56 @@ private:
     TcpClient* tcpClient_;
 
     std::atomic_bool is_init;
+
+    using ServiceSearchHandler = std::function<void(nacos::NamingService *)>;
+    std::queue<ServiceSearchHandler> workers_;
+    std::mutex wokers_mutex_;
+    std::condition_variable condition_;
+    std::thread searchServiceWorker_;
+    bool is_close;
+
+    // 搜索服务后台进程
+    void ServiceSearchWorker() {
+        nacos::Properties configProps;
+        configProps[nacos::PropertyKeyConst::SERVER_ADDR] = "127.0.0.1";
+        nacos::INacosServiceFactory *factory = nacos::NacosFactoryFactory::getNacosFactory(configProps);
+        nacos::ResourceGuard <nacos::INacosServiceFactory> _guardFactory(factory);
+        nacos::NamingService *namingSvc = factory->CreateNamingService();
+        nacos::ResourceGuard <nacos::NamingService> _guardService(namingSvc);
+
+        while (true) {
+            ServiceSearchHandler work;
+
+            {
+                std::unique_lock<std::mutex> lock(wokers_mutex_);
+                condition_.wait(lock, [this]{
+                    return !workers_.empty() || is_close;
+                });
+
+                if (!workers_.empty()) {
+                    work = std::move(workers_.front());
+                    workers_.pop();
+                }
+
+                if (is_close) {
+                    break;
+                }
+            }
+
+            work(namingSvc);
+        }
+    
+        // std::list <nacos::Instance> instances = namingSvc->getAllInstances("TestNamingService1");
+        // cout << "getAllInstances from server:" << endl;
+        // for (list<Instance>::iterator it = instances.begin();
+        //      it != instances.end(); it++) {
+        //     cout << "Instance:" << it->toString() << endl;
+        // }
+    }
+    
 public:
     // this可能会导致异常，如果有条件，尽量换成shared_ptr
-    RpcClient() : id_(0), tcpClient_(nullptr), is_init(false) {
+    RpcClient() : id_(0), tcpClient_(nullptr), is_init(false), is_close(false), searchServiceWorker_(&RpcClient::ServiceSearchWorker, this) {
         std::thread tcpClientWorker([this]{
             TcpClient tcpClient(muduo::net::InetAddress("127.0.0.1", 8080), std::bind(&RpcClient::Handler, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
 
@@ -62,9 +111,49 @@ public:
         });
 
         tcpClientWorker.detach();
-
     }
-    ~RpcClient();
+
+    ~RpcClient() {
+        {
+            std::lock_guard<std::mutex> lock(wokers_mutex_);
+            is_close = true;
+        }    
+        condition_.notify_all();
+
+        if (searchServiceWorker_.joinable()) {
+            searchServiceWorker_.join();
+        }
+    }
+
+    std::list<nacos::Instance> getAllInstances(const std::string& name) {
+        // 1. 创建 shared_ptr<packaged_task>
+        auto task = std::make_shared<std::packaged_task<std::list<nacos::Instance>(nacos::NamingService*)>>(
+            [name](nacos::NamingService* namingSvc) {
+                return namingSvc->getAllInstances(name);
+            }
+        );
+    
+        // 2. 获取 future
+        auto fut = task->get_future();
+    
+        {
+            std::lock_guard<std::mutex> lock(wokers_mutex_);
+    
+            if (is_close) {
+                throw RpcException("Call getAllInstances during program close");
+            }
+    
+            // 3. 提交可复制的 lambda 到队列
+            workers_.emplace([task](nacos::NamingService* namingSvc) {
+                (*task)(namingSvc); // 执行任务，触发 set_value
+            });
+        }
+    
+        condition_.notify_one(); // 唤醒工作线程
+    
+        // 4. 同步等待结果
+        return fut.get();
+    }
 
     // 获取单实例
     static RpcClient& GetInstance();
@@ -143,9 +232,9 @@ public:
 
 // }
 
-inline RpcClient::~RpcClient() {
+// inline RpcClient::~RpcClient() {
 
-}
+// }
 
 // 获取单实例
 inline RpcClient& RpcClient::GetInstance() {

@@ -10,7 +10,7 @@ using namespace minirpc;
 int main(int argc, char const *argv[])
 {
     
-    RpcServer::GetInstance().Start();
+    RpcServer::GetInstance().Start(8082);
     return 0;
 
     // std::string srvName = "aaa";

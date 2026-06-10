@@ -4,7 +4,7 @@
  * @Author       : desyang
  * @Date         : 2026-06-08 16:19:14
  * @LastEditors  : desyang
- * @LastEditTime : 2026-06-09 17:57:42
+ * @LastEditTime : 2026-06-10 10:31:13
 **/
 #pragma once
 
@@ -13,10 +13,8 @@
 #include <vector>
 #include <functional>
 #include <shared_mutex>
+#include <queue>
 
-// void Handler(const TcpConnectionPtr&,
-//     Buffer*,
-//     Timestamp) {
 #include <muduo/net/TcpConnection.h>
 #include <muduo/net/Buffer.h>
 #include <muduo/base/Timestamp.h>
@@ -30,19 +28,16 @@
 #include "minirpc/protocol/Decoder.h"
 #include "minirpc/protocol/Encoder.h"
 #include "minirpc/net_muduo/TcpServer.h"
+#include "minirpc/common/logger.h"
 
-// 对于RpcServer 端，
-// 1. key, funcHandler方式保存 handler(const std::string&, std::string&);
-// 2. 通过一个宏，将服务注册到unordered_map中，接着，接收用户请求
-// 3. 包解析，参数序列化
-// 4. 调用服务方法
-// 5. 将返回结果进行序列化，将结果发送回去
+#include "Nacos.h"
 
-// #define SERVICE_BIND(Class) \
-//     minirpc::RpcServer::GetInstance().RegisterService()
+#include <memory>
 
 namespace minirpc
 {
+
+// 需要为RpcServer提供一个后台常驻程序，常驻程序是一个循环，只有当程序结束才停止，循环内的任务就是将<待注册服务注册到服务中心>
     
 class RpcServer
 {
@@ -51,7 +46,58 @@ private:
     std::unordered_map<std::string, RequestHandler> handlers_;
     std::vector<std::string> service_names_;
     mutable std::shared_mutex mutex_;
-    TcpServer tcpServer_;
+    std::unique_ptr<TcpServer> tcpServer_;
+    int port_;
+
+    std::thread registerWorker_;
+    std::queue<nacos::Instance> instances_;
+    bool is_close_;
+    mutable std::mutex instance_mutex_;
+    std::condition_variable condition_;
+
+
+    // 此处实现注册逻辑
+    void ServiceRegisterWorker() {
+        // 启动注册服务
+        nacos::Properties configProps;
+        configProps[nacos::PropertyKeyConst::SERVER_ADDR] = "127.0.0.1"; // 注册中心地址，后续使用配置文件+域名来替换
+        nacos::INacosServiceFactory *factory = nacos::NacosFactoryFactory::getNacosFactory(configProps);
+        nacos::ResourceGuard<nacos::INacosServiceFactory> _guardFactory(factory);
+
+        auto g_namingSvc = factory->CreateNamingService();
+        nacos::ResourceGuard<nacos::NamingService> _serviceGuard(g_namingSvc);
+
+        // 注册逻辑
+        while (true) {
+            // 等待实例并注册
+            nacos::Instance instance;
+
+            {
+                std::unique_lock<std::mutex> lock(instance_mutex_);
+                condition_.wait(lock, [this]{
+                    return !instances_.empty() || is_close_;
+                });
+
+                // 如果程序已经退出，那么立即停止
+                if (is_close_) {
+                    break;
+                } else {
+                    instance = std::move(instances_.front());
+                    instances_.pop();
+                }
+            }
+            
+            // 将实例注册到服务中心
+            try {
+                instance.port = port_;
+                std::string serviceName = instance.clusterName + "@" + instance.groupName + "::" + instance.serviceName;
+                g_namingSvc->registerInstance(serviceName, instance);
+            } catch (nacos::NacosException &e) {
+                LOG_INFO("Nacos registration failed: %s", e.what());
+                // throw std::runtime_error(std::string("Nacos registration failed: ") + e.what());
+            }
+        }
+    }
 
     template<class R, class F, class Param>
     void call_and_serialize(F&& f, Param&& param, std::string& res) {
@@ -65,39 +111,69 @@ private:
     }
 
 public:
-    RpcServer() : tcpServer_() {
-        tcpServer_.setMessageCallback(std::bind(&RpcServer::Handler, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
+    RpcServer() : is_close_(false) {
     }
 
-    ~RpcServer() = default;
+    ~RpcServer() {
+        {
+            std::lock_guard<std::mutex> lock(instance_mutex_);
+            is_close_ = true;
+        }
+        condition_.notify_all();
 
-    void Start() {
-        tcpServer_.Start();
+        if (registerWorker_.joinable()) {
+            registerWorker_.join();
+        }
+    }
+
+    void Start(int port = 8080, const char* name = "TcpServer") {
+        port_ = port;
+        // 启用后台常驻注册程序
+        registerWorker_ = std::thread(&RpcServer::ServiceRegisterWorker, this);
+
+        tcpServer_ = std::make_unique<TcpServer>(port, name);
+        tcpServer_->setMessageCallback(std::bind(&RpcServer::Handler, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
+        tcpServer_->Start();
     }
 
     static RpcServer& GetInstance();
 
+    void addServiceInstance(const char* name, const char* groupName = "DefaultGroup", const char* clusterName = "DefaultCluster") {
+        nacos::Instance instance;
+        instance.clusterName = clusterName;
+        instance.groupName = groupName;
+        instance.serviceName = name;
+        instance.ip = "127.0.0.1"; // 暂定
+        instance.ephemeral = true;
+
+        {
+            std::lock_guard<std::mutex> lock(instance_mutex_);
+            instances_.emplace(std::move(instance));
+        }
+        condition_.notify_one();
+    }
+
     template<class R, class F, typename ...Args>
     void RegisterService(const char* classNmae, const char* name, F&& f) {
-
-        // 通过函数和参数来进行参数解析
-
         // 写锁
-        std::unique_lock<std::shared_mutex> lock(mutex_);
-        service_names_.emplace_back(classNmae, strlen(classNmae));
-        handlers_[name] = [func = std::forward<F>(f), this](const std::string& req, std::string& resp){
-            using trait = function_traits<F>;
+        {
+            std::unique_lock<std::shared_mutex> lock(mutex_);
+            service_names_.emplace_back(classNmae, strlen(classNmae));
+            handlers_[name] = [func = std::forward<F>(f), this](const std::string& req, std::string& resp){
+                using trait = function_traits<F>;
+    
+                if constexpr (trait::is_single_arg) {
+                    using arg_type = typename trait::first_arg;
+                    arg_type param = Serialize::Deserialization<arg_type>(req);
+                    call_and_serialize<R>(func, param, resp);
+                } else {
+                    using args_tuple = typename trait::args_tuple;
+                    args_tuple param = Serialize::Deserialization<args_tuple>(req);
+                    call_and_serialize<R>(func, param, resp);
+                }
+            };
+        }
 
-            if constexpr (trait::is_single_arg) {
-                using arg_type = typename trait::first_arg;
-                arg_type param = Serialize::Deserialization<arg_type>(req);
-                call_and_serialize<R>(func, param, resp);
-            } else {
-                using args_tuple = typename trait::args_tuple;
-                args_tuple param = Serialize::Deserialization<args_tuple>(req);
-                call_and_serialize<R>(func, param, resp);
-            }
-        };
     }
 
     /// @brief 调用rpc service
