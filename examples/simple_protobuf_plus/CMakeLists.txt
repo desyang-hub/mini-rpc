@@ -56,7 +56,7 @@ target_link_libraries(client_protobuf_plus
     common
     protocol
     protobuf
-    nlohmann_json_interface
+    nlohmann_json::nlohmann_json
     muduo_net
     muduo_base
 )
@@ -68,7 +68,7 @@ target_link_libraries(server_protobuf_plus
     net
     common
     protocol
-    nlohmann_json_interface
+    nlohmann_json::nlohmann_json
     muduo_net
     muduo_base
 )

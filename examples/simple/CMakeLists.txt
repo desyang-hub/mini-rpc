@@ -7,7 +7,7 @@ target_link_libraries(client PRIVATE
     core
     net
     common
-    nlohmann_json_interface
+    nlohmann_json::nlohmann_json
 )
 
 
@@ -21,5 +21,5 @@ target_link_libraries(server PRIVATE
     core
     net
     common
-    nlohmann_json_interface
+    nlohmann_json::nlohmann_json
 )

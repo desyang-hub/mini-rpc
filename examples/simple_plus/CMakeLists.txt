@@ -7,7 +7,7 @@ target_link_libraries(client_p PRIVATE
     core
     net
     common
-    nlohmann_json_interface
+    nlohmann_json::nlohmann_json
     muduo_net
     muduo_base
 )
@@ -28,7 +28,7 @@ target_link_libraries(server_p PRIVATE
     core
     net
     common
-    nlohmann_json_interface
+    nlohmann_json::nlohmann_json
     muduo_net
     muduo_base
 )

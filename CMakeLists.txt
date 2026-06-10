@@ -1,10 +1,10 @@
 cmake_minimum_required(VERSION 3.20)
 
 # get minirpc version by minirpc/version.h
-include(cmake/version.cmake)
-minirpc_extract_version()
+# include(cmake/version.cmake)
+# minirpc_extract_version()
 
-project(minirpc VERSION ${MINIRPC_VERSION})
+project(minirpc VERSION 2.0.0)
 message(STATUS "Build minirpc: ${MINIRPC_VERSION}")
 
 # setting luchange standerd
@@ -12,13 +12,9 @@ set(CMAKE_CXX_STANDARD 17) # equal -std=c++17
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 option(BUILD_EXAMPLES OFF)
+message(STATUS "Build examples: ${BUILD_EXAMPLES}")
 
 set(LIB_TYPE "")
-
-# set output save path
-# set(LIBRARY_OUTPUT_PATH ${CMAKE_SOURCE_DIR}/lib)
-# set(EXECUTABLE_OUTPUT_PATH ${CMAKE_SOURCE_DIR}/bin)
-
 
 include(FetchContent)
 #start=============== dependencies ===============
@@ -29,10 +25,11 @@ FetchContent_Declare(
     GIT_TAG          v3.11.2
 )
 FetchContent_MakeAvailable(nlohmann_json)
+# add_library(nlohmann_json_interface ALIAS nlohmann_json::nlohmann_json)
 
-add_library(nlohmann_json_interface INTERFACE)
-target_include_directories(nlohmann_json_interface INTERFACE
-    ${nlohmann_json_SOURCE_DIR}/include)
+# add_library(nlohmann_json_interface INTERFACE)
+# target_include_directories(nlohmann_json_interface INTERFACE
+#     ${nlohmann_json_SOURCE_DIR}/include)
 #end =============== dependencies ===============
 
 
@@ -40,24 +37,20 @@ target_include_directories(nlohmann_json_interface INTERFACE
 FetchContent_Declare(
     nacos_cpp
     GIT_REPOSITORY https://github.com/desyang-hub/nacos-sdk-cpp.git
-    GIT_TAG        v1.1.2  # 推荐使用较新稳定版，支持 CMake
+    GIT_TAG        v1.1.3  # 推荐使用较新稳定版，支持 CMake
     # 修复 upstream: CMAKE_SOURCE_DIR → CMAKE_CURRENT_SOURCE_DIR
     # 当 FetchContent 把 nacos_cpp 作为子目录引入时，CMAKE_SOURCE_DIR 指向顶层项目目录
     # 导致 install(DIRECTORY ${CMAKE_SOURCE_DIR}/include/ DESTINATION include/nacos ...)
     # 错误地把主项目的头文件安装到 include/nacos/ 下 (含 minirpc/子目录)
-    PATCH_COMMAND    /usr/bin/sed -i "s/CMAKE_SOURCE_DIR/CMAKE_CURRENT_SOURCE_DIR/g" ${CMAKE_CURRENT_BINARY_DIR}/_deps/nacos_cpp-src/CMakeLists.txt
+    # PATCH_COMMAND    /usr/bin/sed -i "s/CMAKE_SOURCE_DIR/CMAKE_CURRENT_SOURCE_DIR/g" ${CMAKE_CURRENT_BINARY_DIR}/_deps/nacos_cpp-src/CMakeLists.txt
 )
 FetchContent_MakeAvailable(nacos_cpp)
 
 # 编译链接库
 #start=============== common ===============
-add_library(common ""
-    src/minirpc/common/logger.cc
-    src/minirpc/common/TimeStamp.cc
-    src/minirpc/common/utils.cc
-    src/minirpc/common/nacos_config.cc
-    src/minirpc/common/Random.cc
-    src/minirpc/common/RpcException.cc
+aux_source_directory(src/minirpc/common/ COMMON_SOURCE)
+add_library(common ${LIB_TYPE}
+    ${COMMON_SOURCE}
 )
 
 # 为 common 添加包含目录
@@ -69,10 +62,9 @@ target_include_directories(common PUBLIC
 
 
 #start=============== core ===============
-# 创建静态库
+aux_source_directory(src/minirpc/core/ CORE_SOURCE)
 add_library(core ${LIB_TYPE}
-    src/minirpc/core/RpcServer.cc
-    src/minirpc/core/RpcClient.cc
+    ${CORE_SOURCE}
 )
 
 # 为 core 添加包含目录
@@ -80,23 +72,23 @@ target_include_directories(core PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>  # 安装后头文件会放到 include 目录
 )
+
 target_link_libraries(core PRIVATE
     net
     protocol
     common
-    nacos-cli # 静态链接库
+    nacos::nacos-cli # 静态链接库
     muduo_net
     muduo_base
 )
 #end =============== core ===============
 
+
 #start=============== net ===============
 # 创建静态库
+aux_source_directory(src/minirpc/net/ NET_SOURCE)
 add_library(net ${LIB_TYPE}
-    src/minirpc/net/ConnectionManager.cc
-    src/minirpc/net/EndPoint.cc
-    src/minirpc/net/TcpClient.cc
-    src/minirpc/net/TcpServer.cc
+    ${NET_SOURCE}
 )
 
 # 为 net 添加包含目录
@@ -110,7 +102,7 @@ target_include_directories(net PUBLIC
 target_link_libraries(net PRIVATE
     protocol
     common
-    nacos-cli # 静态链接库
+    nacos::nacos-cli # 静态链接库
     muduo_net
     muduo_base
 )
@@ -122,36 +114,33 @@ target_link_libraries(net PRIVATE
 add_library(protocol ${LIB_TYPE}
     src/minirpc/protocol/Serialize.cc
 )
-# 创建动态库
-# add_library(protocol SHARED
-#     source1.cpp
-#     source2.cpp)
 
 # 为 protocol 添加包含目录
 target_include_directories(protocol PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>  # 安装后头文件会放到 include 目录
 )
+
 target_link_libraries(protocol PUBLIC
     common
-    nlohmann_json_interface
+    nlohmann_json::nlohmann_json
 )
 
 #end =============== protocol ===============
 
 #start=============== main ===============
 # 添加可执行文件
-# add_executable(minirpc_main
-#     src/main.cc
-# )
+add_executable(minirpc_main
+    src/main.cc
+)
 
-# # 配置链接库
-# target_link_libraries(minirpc_main PRIVATE
-#     protocol
-#     core
-#     net
-#     common
-# )
+# 配置链接库
+target_link_libraries(minirpc_main PRIVATE
+    protocol
+    core
+    net
+    common
+)
 #end =============== main ===============
 
 
@@ -163,6 +152,7 @@ endif()
 #end =============== example ===============
 
 
+include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/minirpcVersionConfig.cmake)
 
 #start=============== test ===============
 # 测试相关设置
