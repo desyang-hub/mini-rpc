@@ -4,7 +4,7 @@
  * @Author       : desyang
  * @Date         : 2026-06-08 16:19:14
  * @LastEditors  : desyang
- * @LastEditTime : 2026-06-10 10:31:13
+ * @LastEditTime : 2026-06-10 14:56:38
 **/
 #pragma once
 
@@ -90,8 +90,9 @@ private:
             // 将实例注册到服务中心
             try {
                 instance.port = port_;
-                std::string serviceName = instance.clusterName + "@" + instance.groupName + "::" + instance.serviceName;
-                g_namingSvc->registerInstance(serviceName, instance);
+                
+                // std::string serviceName = instance.clusterName + "@" + instance.groupName + "::" + instance.serviceName;
+                g_namingSvc->registerInstance(instance.serviceName, instance);
             } catch (nacos::NacosException &e) {
                 LOG_INFO("Nacos registration failed: %s", e.what());
                 // throw std::runtime_error(std::string("Nacos registration failed: ") + e.what());

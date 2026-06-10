@@ -7,3 +7,5 @@ add_subdirectory(config)
 add_subdirectory(simple_protobuf)
 
 add_subdirectory(simple_plus)
+
+add_subdirectory(simple_protobuf_plus)

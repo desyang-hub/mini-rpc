@@ -18,7 +18,7 @@
     using ReturnType_##Method = typename traits_##Method::return_type; \
     template<typename... Args> \
     ReturnType_##Method Method(Args&&... args) { \
-        return minirpc::RpcClient::GetInstance().Call<ReturnType_##Method>(#Class "." #Method, std::forward<Args>(args)...); \
+        return minirpc::RpcClient::GetInstance().Call<ReturnType_##Method>(#Class, #Class "." #Method, std::forward<Args>(args)...); \
     }
 
 

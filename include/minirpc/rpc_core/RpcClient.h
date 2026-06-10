@@ -4,7 +4,7 @@
  * @Author       : desyang
  * @Date         : 2026-06-08 15:18:23
  * @LastEditors  : desyang
- * @LastEditTime : 2026-06-10 10:32:09
+ * @LastEditTime : 2026-06-10 16:14:42
 **/
 #pragma once
 
@@ -23,8 +23,11 @@
 #include "minirpc/common/function_traits.h"
 #include "minirpc/rpc_core/macro/rpc_service_stub.h"
 #include "minirpc/net_muduo/TcpClient.h"
+#include "minirpc/net_muduo/ConnectionManager.h"
 
 #include <muduo/net/InetAddress.h>
+#include <muduo/net/TcpClient.h>
+#include <muduo/net/EventLoop.h>
 #include <atomic>
 #include <Nacos.h>
 #include <list>
@@ -46,9 +49,7 @@ private:
     // promise
     std::unordered_map<uint64_t, std::promise<Response>> promises_;
 
-    TcpClient* tcpClient_;
-
-    std::atomic_bool is_init;
+    ConnectionManager connMgr_;
 
     using ServiceSearchHandler = std::function<void(nacos::NamingService *)>;
     std::queue<ServiceSearchHandler> workers_;
@@ -87,30 +88,52 @@ private:
 
             work(namingSvc);
         }
-    
-        // std::list <nacos::Instance> instances = namingSvc->getAllInstances("TestNamingService1");
-        // cout << "getAllInstances from server:" << endl;
-        // for (list<Instance>::iterator it = instances.begin();
-        //      it != instances.end(); it++) {
-        //     cout << "Instance:" << it->toString() << endl;
-        // }
     }
     
+    // 消息回调函数
+    void MessageHandler(const muduo::net::TcpConnectionPtr& conn, muduo::net::Buffer* buf, muduo::Timestamp t) {   
+        // 这是回调函数，当有结果从服务端发送过来
+        // 1. 尝试接收完整的package
+        // 2. Decode package 成为 srvName, paramBody
+        // 3. promise::set_value
+        int pkg_len = Decoder::Decode(buf->peek(), buf->readableBytes());
+
+        // 出异常了，应该退出
+        if (pkg_len == ERR) {
+            throw RpcException("recv pkg msg exception");
+        } else if (pkg_len == UN_FINISH) {
+            return;
+        } else { // 接收到完整的数据了
+            // 调用函数并发送结果
+            std::string srvName;
+            std::string body;
+
+            Response resp;
+            int id = Decoder::Decode(buf->peek(), resp);
+
+            LOG_INFO("rid: %d", id);
+            buf->retrieve(pkg_len);
+            
+            std::lock_guard<std::mutex> lock(mutex_);
+            if (promises_.count(id) == 0) {
+                throw RpcException("promise id not exists.");
+            }
+            promises_[id].set_value(std::move(resp));
+            promises_.erase(id);
+        }
+    }
+
 public:
     // this可能会导致异常，如果有条件，尽量换成shared_ptr
-    RpcClient() : id_(0), tcpClient_(nullptr), is_init(false), is_close(false), searchServiceWorker_(&RpcClient::ServiceSearchWorker, this) {
-        std::thread tcpClientWorker([this]{
-            TcpClient tcpClient(muduo::net::InetAddress("127.0.0.1", 8080), std::bind(&RpcClient::Handler, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
-
-            // 需要处理同步问题
-            tcpClient_ = &tcpClient;
-
-            is_init.store(true);
-
-            tcpClient.Start();
-        });
-
-        tcpClientWorker.detach();
+    RpcClient() : id_(0), is_close(false), 
+        searchServiceWorker_(&RpcClient::ServiceSearchWorker, this), connMgr_() {
+        // connMgr_.setMessageCallback(std::bind(&RpcClient::MessageHandler, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
+        connMgr_.setMessageCallback(
+            [this](const muduo::net::TcpConnectionPtr& conn,
+                   muduo::net::Buffer* buf,
+                   muduo::Timestamp ts) {
+                this->MessageHandler(conn, buf, ts);
+            });
     }
 
     ~RpcClient() {
@@ -160,13 +183,13 @@ public:
 
     // 代理函数通过方法名和序列化结果作为参数，来调用RpcClient的Invock方法，
     template<class R>
-    std::future<R> AsyncInvoke(const Bytes& bytes);
+    std::future<R> AsyncInvoke(const char* name, const Bytes& bytes);
 
     template<class R>
-    R Invoke(const Bytes& bytes);
+    R Invoke(const char* name, const Bytes& bytes);
 
     template<class R, class ...Args>
-    R Call(const char* name, Args&& ...args) {
+    R Call(const char* serviceName, const char* name, Args&& ...args) {
         Bytes bytes;
 
         {
@@ -188,53 +211,10 @@ public:
             }
         }
 
-        return Invoke<R>(bytes);
+        return Invoke<R>(serviceName, bytes);
     }
 
-
-    void Handler(const muduo::net::TcpConnectionPtr& conn,
-        muduo::net::Buffer* buf,
-        muduo::Timestamp t) { // 这是回调函数，当有结果从服务端发送过来
-            // 1. 尝试接收完整的package
-            // 2. Decode package 成为 srvName, paramBody
-            // 3. promise::set_value
-            int pkg_len = Decoder::Decode(buf->peek(), buf->readableBytes());
-
-            LOG_INFO("Rpc client recv data: ");
-
-            // 出异常了，应该退出
-            if (pkg_len == ERR) {
-                throw RpcException("recv pkg msg exception");
-            } else if (pkg_len == UN_FINISH) {
-                return;
-            } else { // 接收到完整的数据了
-                // 调用函数并发送结果
-                std::string srvName;
-                std::string body;
-
-                Response resp;
-                int id = Decoder::Decode(buf->peek(), resp);
-
-                LOG_INFO("rid: %d", id);
-                buf->retrieve(pkg_len);
-                
-                std::lock_guard<std::mutex> lock(mutex_);
-                if (promises_.count(id) == 0) {
-                    throw RpcException("promise id not exists.");
-                }
-                promises_[id].set_value(std::move(resp));
-                promises_.erase(id);
-            }
-    }
 };
-
-// inline RpcClient::RpcClient() : id_(0) {
-
-// }
-
-// inline RpcClient::~RpcClient() {
-
-// }
 
 // 获取单实例
 inline RpcClient& RpcClient::GetInstance() {
@@ -244,7 +224,7 @@ inline RpcClient& RpcClient::GetInstance() {
 
 // 代理函数通过方法名和序列化结果作为参数，来调用RpcClient的Invock方法，
 template<class R>
-inline std::future<R> RpcClient::AsyncInvoke(const Bytes& bytes) {
+inline std::future<R> RpcClient::AsyncInvoke(const char* name, const Bytes& bytes) {
 
     std::future<Response> f;
     {
@@ -258,18 +238,18 @@ inline std::future<R> RpcClient::AsyncInvoke(const Bytes& bytes) {
     // 将数据发送出去，目前未完成回调
     // send(bytes);
 
-    while (!is_init.load()) {
-        std::cout << "circle" << std::endl;
-        sleep(1);
-    }
+    // 获取可用实例
+    std::list<nacos::Instance> instances = getAllInstances(name);
+    std::vector<EndPoint> eps;
+    eps.reserve(instances.size());
 
-    if (tcpClient_) {
-        LOG_INFO("tcpClient sendRequest");
-        tcpClient_->sendRequest(bytes.data(), bytes.size());
-    } else {
-        LOG_INFO("tcpClient not sendRequest");
+    for (auto it = instances.begin(); it != instances.end(); ++it) {
+        LOG_INFO("valid Instance: %s:%d", it->ip.c_str(), it->port);
+        eps.emplace_back(it->ip, it->port);
     }
-        
+    
+    TcpClientPtr tcpClientPtr = connMgr_.getConnection(eps);
+    tcpClientPtr->sendRequest(bytes.data(), bytes.size());
 
     // 将f->get 封装成一个异步任务
     std::future<R> fut = std::async(std::launch::async, [f = std::move(f)]() mutable {
@@ -286,8 +266,8 @@ inline std::future<R> RpcClient::AsyncInvoke(const Bytes& bytes) {
 }
 
 template<class R>
-inline R RpcClient::Invoke(const Bytes& bytes) {
-    return AsyncInvoke<R>(bytes).get();
+inline R RpcClient::Invoke(const char* name, const Bytes& bytes) {
+    return AsyncInvoke<R>(name, bytes).get();
 }
 
 } // namespace minirpc

@@ -1,9 +1,21 @@
+
+#pragma once
+
 #include <muduo/net/TcpClient.h>
 #include <muduo/net/EventLoop.h>
 #include <muduo/net/TcpConnection.h>
 #include <muduo/base/Mutex.h>
 #include <muduo/net/Callbacks.h>
+#include <muduo/net/EventLoopThread.h>
 #include <atomic>
+#include <memory>
+#include <mutex>
+#include <condition_variable>
+#include <chrono>
+
+#include "minirpc/net_muduo/EndPoint.h"
+#include "minirpc/common/logger.h"
+#include "minirpc/common/RpcException.h"
 
 namespace minirpc
 {
@@ -11,72 +23,78 @@ namespace minirpc
 // 后续操作是通过配置文件来进行远程服务注册中心查询可用实例，并进一步获取实例地址，进行连接
 
 class TcpClient {
+private:
+    muduo::net::EventLoopThread loopThread_;
+    muduo::net::InetAddress serverAddr_;
+    muduo::net::MessageCallback messageCallBack_;
+    std::unique_ptr<muduo::net::TcpClient> clients_;
+    muduo::net::TcpConnectionPtr conns_; // 与 clients_ 一一对应
+
+
+    std::mutex mutex_;
+    std::condition_variable condition_;
+    bool is_connected;
+
 
 public:
-    TcpClient(const muduo::net::InetAddress& serverAddr, const muduo::net::MessageCallback& cb, int poolSize = 1)
-        : loop_(), serverAddr_(serverAddr), index_(0), messageCallBack_(cb) {
-        clients_.reserve(poolSize);
-        conns_.resize(poolSize); // 预分配
+    explicit TcpClient(const EndPoint& ep) : loopThread_(), is_connected(false) {
+        // ✅ EventLoopThread 内部会启动一个专属线程
+        //    并在该线程中创建 EventLoop + 调用 loop()
+        // muduo::net::EventLoopThread loopThread;
+        
+        // startLoop() 会阻塞直到子线程中的 EventLoop 创建完毕
+        // 返回的指针指向子线程中的 Loop，但只用于传递，不在主线程操作
+        muduo::net::EventLoop* loop = loopThread_.startLoop();
+        
+        // TcpClient 可以在主线程构造，但传入的是子线程的 Loop
+        // connect() 内部会通过 runInLoop 将实际连接操作投递到子线程
+        clients_ = std::make_unique<muduo::net::TcpClient>(loop, muduo::net::InetAddress(ep.host.c_str(), ep.port), "MyClient");
 
-        for (int i = 0; i < poolSize; ++i) {
-            auto client = std::make_unique<muduo::net::TcpClient>(&loop_, serverAddr, "RpcClient-" + std::to_string(i));
-            
-            // 捕获 i（注意：必须传值，不能引用！）
-            int idx = i;
-            client->setConnectionCallback([this, idx](const muduo::net::TcpConnectionPtr& conn) {
-                muduo::MutexLockGuard lock(mutex_);
-                if (conn->connected()) {
-                    conns_[idx] = conn;
-                } else {
-                    conns_[idx].reset();
-                }
-            });
-
-            if (messageCallBack_)
-                client->setMessageCallback(messageCallBack_);
-
-            // client->setMessageCallback(/* your callback */);
-            client->connect();
-            clients_.push_back(std::move(client));
-        }
+        clients_->setConnectionCallback([this](const muduo::net::TcpConnectionPtr& conn){
+            std::lock_guard<std::mutex> lock(mutex_);
+            if (conn->connected()) {
+                conns_ = conn;       // ✅ 连接建立，保存
+                is_connected = true;
+            } else {
+                conns_.reset();      // ✅ 连接断开，清除
+                // 可选：触发重连逻辑、通知连接管理器该 Endpoint 不可用等
+                is_connected = false;
+            }
+        });
     }
 
     void Start() {
-        loop_.loop();
+        clients_->connect();
+    }
+
+    void setMessageCallback(muduo::net::MessageCallback cb) {
+        if (!cb) {
+            LOG_ERROR("getConnection: messageCallback_ is empty! RpcClient may be destroyed.");
+        }
+        clients_->setMessageCallback(std::move(cb));
     }
 
     void sendRequest(const std::string& req) {
         return sendRequest(req.c_str(), req.size());
     }
 
-
     void sendRequest(const void* data, size_t len) {
-        int i = index_++;
-        size_t idx = i % clients_.size();
-
-        muduo::net::TcpConnectionPtr conn;
-        {
-            muduo::MutexLockGuard lock(mutex_);
-            conn = conns_[idx];
+        std::unique_lock<std::mutex> lock(mutex_);
+        if (!condition_.wait_for(lock, std::chrono::seconds(3), [this]{
+            return is_connected;
+        })) {
+            // 超时逻辑
+            throw RpcException("Request Timeouts Error.");
         }
 
-        if (conn && conn->connected()) {
-            conn->getLoop()->runInLoop([conn, req = std::string((const char*)data, len)]() {
-                if (conn->connected()) {
-                    conn->send(req);
-                }
-            });
-        }
+        conns_->getLoop()->runInLoop([this, req = std::string((const char*)data, len)]() {
+            if (conns_->connected()) {
+                conns_->send(req);
+            }
+        });
     }
-
-private:
-    muduo::net::EventLoop loop_;
-    muduo::net::InetAddress serverAddr_;
-    muduo::net::MessageCallback messageCallBack_;
-    std::vector<std::unique_ptr<muduo::net::TcpClient>> clients_;
-    std::vector<muduo::net::TcpConnectionPtr> conns_; // 与 clients_ 一一对应
-    mutable muduo::MutexLock mutex_;
-    std::atomic<int> index_;
 };
+
+using TcpClientPtr = std::shared_ptr<TcpClient>;
 
 } // namespace minirpc

@@ -12,6 +12,9 @@ target_link_libraries(client_p PRIVATE
     muduo_base
 )
 
+# target_compile_options(client_p PRIVATE -fsanitize=address -fno-omit-frame-pointer -O1)
+# target_link_options(client_p PRIVATE -fsanitize=address)
+
 
 add_executable(server_p
     UserService.cc
