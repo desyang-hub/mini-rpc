@@ -4,7 +4,7 @@
  * @Author       : desyang
  * @Date         : 2026-06-08 16:19:14
  * @LastEditors  : desyang
- * @LastEditTime : 2026-06-10 17:21:30
+ * @LastEditTime : 2026-06-15 18:44:53
 **/
 #pragma once
 
@@ -31,8 +31,8 @@
 #include "minirpc/net/TcpServer.h"
 
 #include <memory>
-// #include "Nacos.h"
-#include "nacos/Nacos.h"
+#include "Nacos.h"
+// #include "nacos/Nacos.h"
 
 namespace minirpc
 {
@@ -128,6 +128,8 @@ template<class Class, typename MethodPtr>
 inline void bind_rpc_method_impl(const char* className, const char* name, MethodPtr methodPtr) {
     using type_trait = function_traits<MethodPtr>;
     using return_type = typename type_trait::return_type;
+
+    LOG_INFO("Method register: %s", name);
 
     if constexpr (type_trait::is_single_arg) {
         using arg_type = typename type_trait::first_arg;

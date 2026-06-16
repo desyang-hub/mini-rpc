@@ -16,7 +16,7 @@ namespace minirpc
 class TcpServer
 {
 public:
-    explicit TcpServer(int port = 8080, const char *name = "TcpServer");
+    explicit TcpServer(int port = 8080, const char *name = "TcpServer", size_t thread_num = 4);
     ~TcpServer();
 
     /// @brief 用于设置消息回调

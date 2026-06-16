@@ -26,6 +26,12 @@ endif()
 # === 4. 生成 C++ 代码（.pb.cc 和 .pb.h）===
 protobuf_generate_cpp(PROTO_SRC PROTO_HEADER ${PROTO_FILE})
 
+
+include_directories(
+    ${CMAKE_SOURCE_DIR}/include
+)
+
+
 # === 5. 创建可执行文件 ===
 add_executable(client_protobuf_plus
     Client.cc
@@ -38,6 +44,11 @@ add_executable(server_protobuf_plus
     ${PROTO_SRC}
 )
 
+add_executable(rpcbench
+    rpcbench.cc
+    ${PROTO_SRC}
+)
+
 # === 6. 设置头文件搜索路径（生成的 .pb.h 在构建目录）===
 target_include_directories(client_protobuf_plus 
     PRIVATE ${CMAKE_CURRENT_BINARY_DIR}
@@ -46,7 +57,19 @@ target_include_directories(client_protobuf_plus
 target_include_directories(server_protobuf_plus 
     PRIVATE ${CMAKE_CURRENT_BINARY_DIR}
 )
-# target_include_directories(simple_protobuf PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
+
+target_include_directories(rpcbench 
+    PRIVATE ${CMAKE_CURRENT_BINARY_DIR}
+)
+
+target_compile_options(rpcbench PRIVATE -fsanitize=address -fno-omit-frame-pointer -O1)
+target_link_options(rpcbench PRIVATE -fsanitize=address)
+
+# target_compile_options(rpcbench PRIVATE -fsanitize=leak -fno-omit-frame-pointer -O1)
+# target_link_options(rpcbench PRIVATE  -fsanitize=leak)
+
+# target_compile_options(rpcbench PRIVATE -fsanitize=thread -fno-omit-frame-pointer -O1)
+# target_link_options(rpcbench PRIVATE  -fsanitize=thread)
 
 # === 7. 链接 Protobuf 库（否则会链接错误）===
 target_link_libraries(client_protobuf_plus 
@@ -59,10 +82,24 @@ target_link_libraries(client_protobuf_plus
     nlohmann_json::nlohmann_json
     muduo_net
     muduo_base
+    nacos::nacos-cli
+)
+
+target_link_libraries(rpcbench 
+    ${Protobuf_LIBRARIES}
+    core
+    net
+    common
+    protocol
+    protobuf
+    nlohmann_json::nlohmann_json
+    muduo_net
+    muduo_base
+    nacos::nacos-cli
 )
 
 target_link_libraries(server_protobuf_plus 
-    nacos-cli
+    nacos::nacos-cli
     ${Protobuf_LIBRARIES}
     core
     net

@@ -1,2 +1,2 @@
 all:
-	cmake -B build && cmake --build build -j4
+	cmake -B build -DBUILD_EXAMPLES=ON && cmake --build build -j4

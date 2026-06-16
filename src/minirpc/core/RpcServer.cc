@@ -4,7 +4,7 @@
  * @Author       : desyang
  * @Date         : 2026-06-08 16:19:14
  * @LastEditors  : desyang
- * @LastEditTime : 2026-06-10 17:24:38
+ * @LastEditTime : 2026-06-16 16:59:24
 **/
 
 #include "minirpc/core/RpcServer.h"
@@ -84,11 +84,12 @@ bool RpcServer::Invock(const std::string& srvName, const std::string& req, std::
     try {
         handlers_.at(srvName)(req, resp); // .at() 会在 key 不存在时抛出 std::out_of_range
         return true;
+    } catch (const std::out_of_range& e) {
+        LOG_ERROR("RPC service not found: %s", srvName.c_str());
+        return false;
     } catch (const std::exception& e) {
         resp = e.what();
-        LOG_ERROR("RPC service not found: %s", srvName.c_str());
-        // 可以在这里构造一个错误响应包发回给客户端
-        // throw RpcException("Service not found: " + srvName);
+        LOG_ERROR("Service %s invoke err: %s", srvName.c_str(), resp.c_str());
         return false;
     }
 }
@@ -107,32 +108,36 @@ void RpcServer::Handler(const muduo::net::TcpConnectionPtr& conn,
     // 1. 尝试接收完整的 package
     // 2. Decode package 成为 srvName, paramBody
     // 3. Invock(srvName, paramBody)
-    int pkg_len = Decoder::Decode(buf->peek(), buf->readableBytes());
 
-    // 出异常了，应该退出
-    if (pkg_len == ERR) {
-        throw RpcException("recv pkg msg exception");
-    } else if (pkg_len == UN_FINISH) {
-        return;
-    } else { // 接收到完整的数据了
-        // 调用函数并发送结果
+    while (buf->readableBytes()) {
+        int pkg_len = Decoder::Decode(buf->peek(), buf->readableBytes());
 
-        std::string srvName;
-        std::string body;
-        std::string resp;
+        // 出异常了，应该退出
+        if (pkg_len == ERR) {
+            throw RpcException("recv pkg msg exception");
+        } else if (pkg_len == UN_FINISH) {
+            return;
+        } else { // 接收到完整的数据了
+            // 调用函数并发送结果
 
-        uint64_t rid = Decoder::Decode(buf->peek(), srvName, body);
-        buf->retrieve(pkg_len);
+            std::string srvName;
+            std::string body;
+            std::string resp;
 
-        bool isSuccess = Invock(srvName, body, resp);
-        Bytes bytes;
+            uint64_t rid = Decoder::Decode(buf->peek(), srvName, body);
+            LOG_INFO("request id: %lu", rid);
+            buf->retrieve(pkg_len);
 
-        if (isSuccess) {
-            bytes = Encoder::SuccessRes(rid, resp.c_str(), resp.size());
-        } else {
-            bytes = Encoder::ErrorRes(rid, ERR, resp.c_str());
+            bool isSuccess = Invock(srvName, body, resp);
+            Bytes bytes;
+
+            if (isSuccess) {
+                bytes = Encoder::SuccessRes(rid, resp.c_str(), resp.size());
+            } else {
+                bytes = Encoder::ErrorRes(rid, ERR, resp.c_str());
+            }
+            conn->send(bytes.data(), bytes.size());
         }
-        conn->send(bytes.data(), bytes.size());
     }
 }
 

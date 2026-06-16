@@ -12,9 +12,10 @@ namespace minirpc
 
 // ====== TcpServer implementation ======
 
-TcpServer::TcpServer(int port, const char *name)
+TcpServer::TcpServer(int port, const char *name, size_t thread_num)
     : loop_(), addr_(port), server_(&loop_, addr_, name)
 {
+    server_.setThreadNum(thread_num);
 }
 
 TcpServer::~TcpServer() = default;

@@ -8,14 +8,20 @@
 #include "minirpc/net/EndPoint.h"
 #include "minirpc/common/logger.h"
 #include "minirpc/common/RpcException.h"
+#include "minirpc/net/ConnectionManager.h"
+
+#include <iostream>
+#include <unistd.h>
 
 namespace minirpc
 {
 
+static std::atomic<uint64_t> g_send_enter_count{0};
+
 // ====== TcpClient implementation ======
 
-TcpClient::TcpClient(const EndPoint &ep)
-    : loop_(), is_connected_(false)
+TcpClient::TcpClient(const EndPoint &ep, ConnectionManager* connMgr)
+    : loop_(), is_connected_(false), ep_(ep), connMgr_(connMgr)
 {
     // ✅ EventLoopThread 内部会启动一个专属线程
     //    并在该线程中创建 EventLoop + 调用 loop()
@@ -29,17 +35,21 @@ TcpClient::TcpClient(const EndPoint &ep)
     // connect() 内部会通过 runInLoop 将实际连接操作投递到子线程
     clients_ = std::make_unique<muduo::net::TcpClient>(loop, muduo::net::InetAddress(ep.host.c_str(), ep.port), "MyClient");
 
-    clients_->setConnectionCallback([this](const muduo::net::TcpConnectionPtr &conn)
-                                    {
-            std::lock_guard<std::mutex> lock(mutex_);
-            if (conn->connected()) {
-                conns_ = conn;       // ✅ 连接建立，保存
-                is_connected_ = true;
-            } else {
-                conns_.reset();      // ✅ 连接断开，清除
-                // 可选：触发重连逻辑、通知连接管理器该 Endpoint 不可用等
-                is_connected_ = false;
-            } });
+    clients_->setConnectionCallback(
+        [this](const muduo::net::TcpConnectionPtr &conn) {
+            {
+                std::lock_guard<std::mutex> lock(mutex_);
+                if (conn->connected()) {
+                    conns_ = conn;       // ✅ 连接建立，保存
+                    is_connected_ = true;
+                } else {
+                    conns_.reset();      // ✅ 连接断开，清除
+                    // 可选：触发重连逻辑、通知连接管理器该 Endpoint 不可用等
+                    is_connected_ = false;
+                }
+            }
+            condition_.notify_all();
+        });
 }
 
 void TcpClient::Start()
@@ -64,18 +74,27 @@ void TcpClient::sendRequest(const std::string &req)
 void TcpClient::sendRequest(const void *data, size_t len)
 {
     std::unique_lock<std::mutex> lock(mutex_);
-    if (!condition_.wait_for(lock, std::chrono::seconds(3),  [this] {
-            return is_connected_.load(); 
-        })) {
+    g_send_enter_count.fetch_add(1, std::memory_order_relaxed);
+    if (!condition_.wait_for(lock, std::chrono::seconds(1), 
+        [this] { return is_connected_.load() && conns_->connected(); })) {
         // 超时逻辑
+        exit(-1);
         throw RpcException("Request Timeouts Error.");
     }
+    conns_->getLoop()->runInLoop([this, data_copy = std::string((const char*)data, len)]() {
+        conns_->send(data_copy);
+    });
+    // conns_->send((const char *)data, len);
+    lock.unlock();
+    recovery();
+    // std::cout << "g_send_enter_count: " << g_send_enter_count.load() << std::endl;
+}
 
-    conns_->getLoop()->runInLoop([this, req = std::string((const char *)data, len)]()
-                                 {
-            if (conns_->connected()) {
-                conns_->send(req);
-            } });
+
+void TcpClient::recovery() {
+    if (connMgr_ != nullptr) {
+        connMgr_->recovery(shared_from_this());
+    }
 }
 
 } // namespace minirpc

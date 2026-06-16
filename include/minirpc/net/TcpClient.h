@@ -17,6 +17,7 @@
 #include <mutex>
 #include <condition_variable>
 #include <chrono>
+#include <memory>
 
 #include "minirpc/net/EndPoint.h"
 #include "minirpc/common/nonecopyable.h"
@@ -24,10 +25,12 @@
 namespace minirpc
 {
 
-class TcpClient : public nonecopyable
+class ConnectionManager;
+
+class TcpClient : public nonecopyable, public std::enable_shared_from_this<TcpClient>
 {
 public:
-    explicit TcpClient(const EndPoint &ep);
+    TcpClient(const EndPoint &ep, ConnectionManager* connMgr = nullptr);
     ~TcpClient() = default;
 
     void Start();
@@ -38,7 +41,19 @@ public:
 
     void sendRequest(const void *data, size_t len);
 
+    void recovery();
+
+    EndPoint& endPoint() {
+        return ep_;
+    }
+
+    const EndPoint& endPoint() const {
+        return ep_;
+    }
+
 private:
+    EndPoint ep_;
+    ConnectionManager* connMgr_;
     muduo::net::EventLoopThread loop_;
     muduo::net::InetAddress serverAddr_;
     muduo::net::MessageCallback messageCallBack_;

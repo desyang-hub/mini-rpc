@@ -4,7 +4,7 @@
  * @Author       : desyang
  * @Date         : 2026-06-08 15:18:23
  * @LastEditors  : desyang
- * @LastEditTime : 2026-06-10 17:40:19
+ * @LastEditTime : 2026-06-16 19:19:44
 **/
 
 #include "minirpc/core/RpcClient.h"
@@ -12,6 +12,7 @@
 #include "minirpc/protocol/Decoder.h"
 #include "minirpc/protocol/Serialize.h"
 #include "minirpc/common/RpcException.h"
+#include "minirpc/common/Random.h"
 #include "minirpc/net/TcpClient.h"
 #include "minirpc/net/ConnectionManager.h"
 #include "minirpc/common/logger.h"
@@ -21,7 +22,10 @@
 #include <muduo/net/EventLoop.h>
 #include <muduo/net/Callbacks.h>
 
+#include <iostream>
+
 #include <Nacos.h>
+#include <unordered_set>
 
 namespace minirpc
 {
@@ -92,31 +96,69 @@ void RpcClient::MessageHandler(const muduo::net::TcpConnectionPtr& conn, muduo::
     // 1. 尝试接收完整的 package
     // 2. Decode package 成为 srvName, paramBody
     // 3. promise::set_value
-    int pkg_len = Decoder::Decode(buf->peek(), buf->readableBytes());
 
-    // 出异常了，应该退出
-    if (pkg_len == ERR) {
-        throw RpcException("recv pkg msg exception");
-    } else if (pkg_len == UN_FINISH) {
-        return;
-    } else { // 接收到完整的数据了
-        // 调用函数并发送结果
-        std::string srvName;
-        std::string body;
+    while (buf->readableBytes()) {  // 一次可能有多个包
+        int pkg_len = Decoder::Decode(buf->peek(), buf->readableBytes());
 
-        Response resp;
-        int id = Decoder::Decode(buf->peek(), resp);
+        // 出异常了，应该退出
+        if (pkg_len == ERR) {
+            throw RpcException("recv pkg msg exception");
+        } else if (pkg_len == UN_FINISH) {
+            return;
+        } else { // 接收到完整的数据了
+            // 调用函数并发送结果
+            Response resp;
+            int id = Decoder::Decode(buf->peek(), resp);
 
-        LOG_INFO("rid: %d", id);
-        buf->retrieve(pkg_len);
+            // LOG_INFO("rid: %d", id);
+            buf->retrieve(pkg_len);
 
-        std::lock_guard<std::mutex> lock(mutex_);
-        if (promises_.count(id) == 0) {
-            throw RpcException("promise id not exists.");
+            std::lock_guard<std::mutex> lock(mutex_);
+            if (promises_.count(id) == 0) {
+                
+                throw RpcException("promise id not exists. ");
+            }
+            promises_[id].set_value(std::move(resp));
+            promises_.erase(id);
         }
-        promises_[id].set_value(std::move(resp));
-        promises_.erase(id);
     }
+
+
+    // std::cout << "=== MessageHandler triggered, readable=" << buf->readableBytes() << std::endl;
+    
+    // int pkg_count = 0;
+    // while (buf->readableBytes() > 0) {
+    //     pkg_count++;
+    //     int pkg_len = Decoder::Decode(buf->peek(), buf->readableBytes());
+        
+    //     if (pkg_len == ERR) {
+    //         std::cout << "Decode ERR at pkg #" << pkg_count << std::endl;
+    //         conn->shutdown(); 
+    //         return;
+    //     }
+    //     if (pkg_len == UN_FINISH) {
+    //         std::cout << "UN_FINISH at pkg #" << pkg_count << ", breaking loop." << std::endl;
+    //         return;
+    //     }
+
+    //     Response resp;
+    //     int id = Decoder::Decode(buf->peek(), resp);
+    //     std::cout << "Parsed pkg #" << pkg_count << ", id=" << id << ", len=" << pkg_len << std::endl;
+        
+    //     buf->retrieve(pkg_len);
+
+    //     // ⚠️ 关键：绝对不要 throw，只打日志
+    //     std::lock_guard<std::mutex> lock(mutex_);
+    //     auto it = promises_.find(id);
+    //     if (it == promises_.end()) {
+    //         std::cout << "!!! ORPHAN RESPONSE: id=" << id << " has no promise!" << std::endl;
+    //         continue; 
+    //     }
+    //     std::cout << "Setting value for id=" << id << std::endl;
+    //     it->second.set_value(std::move(resp));
+    //     promises_.erase(it);
+    // }
+    // std::cout << "=== Handler done, processed " << pkg_count << " pkgs." << std::endl;
 }
 
 // 搜索服务后台进程

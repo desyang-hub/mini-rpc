@@ -4,7 +4,7 @@
  * @Author       : desyang
  * @Date         : 2026-06-10 11:46:52
  * @LastEditors  : desyang
- * @LastEditTime : 2026-06-10 15:38:58
+ * @LastEditTime : 2026-06-16 11:23:37
 **/
 #pragma once
 
@@ -36,6 +36,8 @@ public:
     TcpClientPtr getConnection(const std::vector<EndPoint>& eps);
 
     void setMessageCallback(muduo::net::MessageCallback cb);
+
+    void recovery(TcpClientPtr ptr);
 
 private:
     class Impl;

@@ -11,7 +11,7 @@ message(STATUS "Build minirpc: ${MINIRPC_VERSION}")
 set(CMAKE_CXX_STANDARD 17) # equal -std=c++17
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-option(BUILD_EXAMPLES OFF)
+option(BUILD_EXAMPLES ON)
 message(STATUS "Build examples: ${BUILD_EXAMPLES}")
 
 set(LIB_TYPE "")
@@ -71,6 +71,7 @@ add_library(core ${LIB_TYPE}
 target_include_directories(core PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>  # 安装后头文件会放到 include 目录
+    ${nacos_cpp_SOURCE_DIR}/include
 )
 
 target_link_libraries(core PRIVATE
@@ -95,14 +96,11 @@ add_library(net ${LIB_TYPE}
 target_include_directories(net PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>  # 安装后头文件会放到 include 目录
-    # /usr/local/include/nacos # libnacos_cli.so
-    ${nacos_cpp_SOURCE_DIR}/include
 )
 
 target_link_libraries(net PRIVATE
     protocol
     common
-    nacos::nacos-cli # 静态链接库
     muduo_net
     muduo_base
 )
@@ -156,7 +154,7 @@ include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/minirpcVersionConfig.cmake)
 
 #start=============== test ===============
 # 测试相关设置
-option(BUILD_TESTS "Build tests" ON)
+option(BUILD_TESTS "Build tests" OFF)
 
 if(BUILD_TESTS)
     enable_testing()
@@ -178,25 +176,25 @@ endif()
 
 # ================== Export Configuration ==================
 # 安装头文件和库 (已有，无需修改)
-# install(TARGETS common core net protocol nlohmann_json_interface
-#     EXPORT minirpc
-#     ARCHIVE DESTINATION lib
-#     LIBRARY DESTINATION lib
-#     RUNTIME DESTINATION bin
-#     INCLUDES DESTINATION include
-# )
+install(TARGETS common core net protocol nlohmann_json nacos-cli
+    EXPORT minirpc
+    ARCHIVE DESTINATION lib
+    LIBRARY DESTINATION lib
+    RUNTIME DESTINATION bin
+    INCLUDES DESTINATION include
+)
 
-# install(DIRECTORY include/ DESTINATION include)
+install(DIRECTORY include/ DESTINATION include)
 
-# # 安装 nlohmann_json 的头文件 (重要!)
-# install(DIRECTORY ${nlohmann_json_SOURCE_DIR}/include/
-#     DESTINATION include
-#     FILES_MATCHING PATTERN "*.hpp")
+# 安装 nlohmann_json 的头文件 (重要!)
+install(DIRECTORY ${nlohmann_json_SOURCE_DIR}/include/
+    DESTINATION include
+    FILES_MATCHING PATTERN "*.hpp")
 
-# # ================== CPack Configuration ==================
-# # 配置打包工具 (生成 .deb, .rpm, .zip 等)
-# include(CPack)
-# set(CPACK_GENERATOR "ZIP") # 开发阶段先用 zip
-# set(CPACK_PACKAGE_NAME "minirpc")
-# set(CPACK_PACKAGE_VERSION ${PROJECT_VERSION})
-# set(CPACK_INCLUDE_TOPLEVEL_DIRECTORY OFF) # 避免生成多余的文件夹
+# ================== CPack Configuration ==================
+# 配置打包工具 (生成 .deb, .rpm, .zip 等)
+include(CPack)
+set(CPACK_GENERATOR "ZIP") # 开发阶段先用 zip
+set(CPACK_PACKAGE_NAME "minirpc")
+set(CPACK_PACKAGE_VERSION ${PROJECT_VERSION})
+set(CPACK_INCLUDE_TOPLEVEL_DIRECTORY OFF) # 避免生成多余的文件夹

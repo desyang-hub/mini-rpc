@@ -4,7 +4,7 @@
  * @Author       : desyang
  * @Date         : 2026-06-08 15:18:23
  * @LastEditors  : desyang
- * @LastEditTime : 2026-06-10 17:39:49
+ * @LastEditTime : 2026-06-16 19:20:40
 **/
 #pragma once
 
@@ -20,12 +20,14 @@
 #include "minirpc/protocol/Encoder.h"
 #include "minirpc/protocol/Decoder.h"
 #include "minirpc/protocol/Serialize.h"
+#include "minirpc/common/utils.h"
 #include "minirpc/common/Response.h"
 #include "minirpc/common/RpcException.h"
 #include "minirpc/common/function_traits.h"
-#include "minirpc/core/macro/rpc_service_stub.h"
 #include "minirpc/net/TcpClient.h"
 #include "minirpc/net/ConnectionManager.h"
+#include "minirpc/core/macro/rpc_service_stub.h"
+#include "minirpc/core/PendingRequest.h"
 
 #include <muduo/net/InetAddress.h>
 #include <muduo/net/TcpClient.h>
@@ -55,18 +57,19 @@ public:
     static RpcClient& GetInstance();
 
     // 代理函数通过方法名和序列化结果作为参数，来调用 RpcClient 的 Invock 方法，
-    template<class R>
-    std::future<R> AsyncInvoke(const char* name, const Bytes& bytes);
+    // template<class R>
+    std::future<Response> AsyncInvoke(const char* name, const Bytes& bytes, uint64_t request_id);
 
     template<class R>
-    R Invoke(const char* name, const Bytes& bytes);
+    R Invoke(const char* name, const Bytes& bytes, uint64_t request_id);
 
     template<class R, class ...Args>
     R Call(const char* serviceName, const char* name, Args&& ...args);
 
 private:
     mutable std::mutex mutex_;
-    uint64_t id_;
+    std::atomic<uint64_t> id_;
+    // uint64_t id_;
     // promise
     std::unordered_map<uint64_t, std::promise<Response>> promises_;
 
@@ -89,42 +92,51 @@ private:
 // ==================== 模板函数实现 ====================
 
 template<class R, class ...Args>
-inline R RpcClient::Call(const char* serviceName, const char* name, Args&& ...args) {
+R RpcClient::Call(const char* serviceName, const char* name, Args&& ...args) {
     Bytes bytes;
 
-    {
-        std::lock_guard<std::mutex> lock(mutex_);
-        ++id_;
-        if constexpr (sizeof...(Args) == 0) {
-            // bytes = Encoder::Encode(name, nullptr, 0);
-            bytes = Encoder::EncodeReq(id_, name, nullptr, 0);
-        }
-        // 单参函数
-        else if constexpr (sizeof...(Args) == 1) {
-            // bytes = Encoder::Encode(name, Serialize::Serialization(args...));
-            std::string body = Serialize::Serialization(args...);
-            bytes = Encoder::EncodeReq(id_, name, body.c_str(), body.size());
-        } else {
-            auto args_tuple = std::make_tuple(std::forward<Args>(args)...);
-            std::string body = Serialize::Serialization(args_tuple);
-            bytes = Encoder::EncodeReq(id_, name, body.c_str(), body.size());
-        }
+    // int request_id;
+    // {
+    //     std::lock_guard<std::mutex> lock(mutex_);
+    uint64_t request_id = id_.fetch_add(1, std::memory_order_relaxed);
+    if constexpr (sizeof...(Args) == 0) {
+        bytes = Encoder::EncodeReq(request_id, name, nullptr, 0);
     }
+    // 单参函数
+    else if constexpr (sizeof...(Args) == 1) {
+        std::string body = Serialize::Serialization(args...);
+        bytes = Encoder::EncodeReq(request_id, name, body.c_str(), body.size());
+    } else {
+        auto args_tuple = std::make_tuple(std::forward<Args>(args)...);
+        std::string body = Serialize::Serialization(args_tuple);
+        bytes = Encoder::EncodeReq(request_id, name, body.c_str(), body.size());
+    }
+    // }
 
-    return Invoke<R>(serviceName, bytes);
+    // std::cout << "send req id: " << request_id << std::endl;
+
+    auto r = Invoke<R>(serviceName, bytes, request_id);
+
+    return r;
 }
 
-template<class R>
-inline std::future<R> RpcClient::AsyncInvoke(const char* name, const Bytes& bytes) {
-    std::future<Response> f;
-    {
-        std::lock_guard<std::mutex> lock(mutex_);
-        promises_[id_] = std::promise<Response>();
-        f = promises_[id_].get_future();
-    }
-
+inline std::future<Response> RpcClient::AsyncInvoke(const char* name, const Bytes& bytes, uint64_t request_id) {
+    std::list<nacos::Instance> instances;
     // 获取可用实例
-    std::list<nacos::Instance> instances = getAllInstances(name);
+    try
+    {
+        instances = std::move(getAllInstances(name));
+    }
+    catch(const std::exception& e)
+    {
+        LOG_ERROR("getAllInstances err: %s", e.what());
+        LOG_INFO("Switch to mock server");
+        nacos::Instance instance;
+        instance.ip = "127.0.0.1";
+        instance.port = 8083;
+        instances.push_back(std::move(instance));
+    }
+     
     std::vector<EndPoint> eps;
     eps.reserve(instances.size());
 
@@ -134,25 +146,43 @@ inline std::future<R> RpcClient::AsyncInvoke(const char* name, const Bytes& byte
     }
 
     TcpClientPtr tcpClientPtr = connMgr_.getConnection(eps);
+    
+    std::unique_lock<std::mutex> lock(mutex_);
+    promises_[request_id] = std::promise<Response>();
+    std::future<Response> f = promises_[request_id].get_future();
     tcpClientPtr->sendRequest(bytes.data(), bytes.size());
+    lock.unlock();
+
+    return f;
+
+    // connMgr_.recovery(std::move(tcpClientPtr)); // 不能立马归还连接
 
     // 将 f->get 封装成一个异步任务
-    std::future<R> fut = std::async(std::launch::async, [f = std::move(f)]() mutable {
-        Response res = f.get();
-        if (res.state != SUCCESS) {
-            // 默认如果失败的话 res.data 就装异常就好了
-            throw RpcException(res.data);
-        }
+    // std::future<R> fut = std::async(std::launch::async, [f = std::move(f)]() mutable {
+    //     Response res = f.get();
+    //     if (res.state != SUCCESS) {
+    //         // 默认如果失败的话 res.data 就装异常就好了
+    //         throw RpcException(res.data);
+    //     }
 
-        return Serialize::Deserialization<R>(res.data.c_str(), res.data.size());
-    });
+    //     return Serialize::Deserialization<R>(res.data.c_str(), res.data.size());
+    // });
 
-    return fut;
+    // return fut;
 }
 
 template<class R>
-inline R RpcClient::Invoke(const char* name, const Bytes& bytes) {
-    return AsyncInvoke<R>(name, bytes).get();
+R RpcClient::Invoke(const char* name, const Bytes& bytes, uint64_t request_id) {
+    Response res = AsyncInvoke(name, bytes, request_id).get();
+    if (res.state != SUCCESS) {
+        // 默认如果失败的话 res.data 就装异常就好了
+        throw RpcException(res.data);
+    }
+
+    return Serialize::Deserialization<R>(res.data.c_str(), res.data.size());
+    // auto fut = AsyncInvoke<R>(name, bytes, request_id);
+    // return fut.get();
+    // return get_with_timeout<R>(fut, std::chrono::milliseconds(100));
 }
 
 } // namespace minirpc

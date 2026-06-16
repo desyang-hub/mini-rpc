@@ -25,6 +25,8 @@ int main(int argc, char const *argv[])
         std::cerr << "login error: " << e.what() << '\n';
     }
 
+    LOG_INFO("step 1");
+
 
     try
     {
@@ -36,6 +38,8 @@ int main(int argc, char const *argv[])
         std::cerr << e.what() << '\n';
     }
 
+    LOG_INFO("step 2");
+
     try
     {
         std::string res = stub.login(user);
@@ -46,39 +50,41 @@ int main(int argc, char const *argv[])
         std::cerr << e.what() << '\n';
     }
 
+    LOG_INFO("step 3");
+
     //=======================================================================
     // UserService服务实例
-    UserService::UserService_Stub jsonStub;
+    // UserService::UserService_Stub jsonStub;
 
-    try
-    {
-        std::string msg = jsonStub.login("root", "root");
-    }
-    catch(const std::exception& e)
-    {
-        std::cerr << "login error: " << e.what() << '\n';
-    }
+    // try
+    // {
+    //     std::string msg = jsonStub.login("root", "root");
+    // }
+    // catch(const std::exception& e)
+    // {
+    //     std::cerr << "login error: " << e.what() << '\n';
+    // }
 
 
-    try
-    {
-        jsonStub.logon("root", "root");
-        std::cout << "register success." << std::endl;
-    }
-    catch(const std::exception& e)
-    {
-        std::cerr << e.what() << '\n';
-    }
+    // try
+    // {
+    //     jsonStub.logon("root", "root");
+    //     std::cout << "register success." << std::endl;
+    // }
+    // catch(const std::exception& e)
+    // {
+    //     std::cerr << e.what() << '\n';
+    // }
 
-    try
-    {
-        std::string user = jsonStub.login("root", "root");
-        std::cout << "user " << user << " login success." << std::endl;
-    }
-    catch(const std::exception& e)
-    {
-        std::cerr << e.what() << '\n';
-    }
+    // try
+    // {
+    //     std::string user = jsonStub.login("root", "root");
+    //     std::cout << "user " << user << " login success." << std::endl;
+    // }
+    // catch(const std::exception& e)
+    // {
+    //     std::cerr << e.what() << '\n';
+    // }
 
     return 0;
 }
