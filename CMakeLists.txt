@@ -46,6 +46,16 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(nacos_cpp)
 
+
+FetchContent_Declare(
+    muduo
+    GIT_REPOSITORY https://github.com/chenshuo/muduo.git
+    GIT_TAG        v2.0.2  # 建议使用稳定 tag，避免 master 变动
+    GIT_SHALLOW    TRUE
+)
+FetchContent_MakeAvailable(muduo)
+
+
 # 编译链接库
 #start=============== common ===============
 aux_source_directory(src/minirpc/common/ COMMON_SOURCE)
@@ -72,6 +82,7 @@ target_include_directories(core PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>  # 安装后头文件会放到 include 目录
     ${nacos_cpp_SOURCE_DIR}/include
+    ${muduo_SOURCE_DIR}
 )
 
 target_link_libraries(core PRIVATE
@@ -96,6 +107,7 @@ add_library(net ${LIB_TYPE}
 target_include_directories(net PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>  # 安装后头文件会放到 include 目录
+    ${muduo_SOURCE_DIR}
 )
 
 target_link_libraries(net PRIVATE
@@ -154,7 +166,10 @@ include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/minirpcVersionConfig.cmake)
 
 #start=============== test ===============
 # 测试相关设置
-option(BUILD_TESTS "Build tests" OFF)
+if(NOT DEFINED BUILD_TESTS)
+    set(BUILD_TESTS OFF CACHE BOOL "Build tests")
+endif()
+message(STATUS "Build tests: ${BUILD_TESTS}")
 
 if(BUILD_TESTS)
     enable_testing()
