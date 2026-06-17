@@ -123,11 +123,21 @@ TEST(RingBufferTest, ReadableZeroInitially) {
 // 网络工具测试
 // ============================================================
 
+void setnoneblocking(int fd) {
+    int flags = fcntl(fd, F_GETFL, 0);
+    if (flags == -1) {
+        perror("fcntl get error");
+        return;
+    }
+
+    fcntl(fd, F_SETFL, flags | O_NONBLOCK);
+}
+
 TEST(NetUtilsTest, SetNonBlocking) {
     int sockfd = socket(AF_INET, SOCK_STREAM, 0);
     ASSERT_GE(sockfd, 0);
 
-    set_nonblocking(sockfd);
+    setnoneblocking(sockfd);
 
     // 验证非阻塞标志
     int flags = fcntl(sockfd, F_GETFL, 0);

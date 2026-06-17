@@ -13,22 +13,42 @@ namespace minirpc
 // ====== TcpServer implementation ======
 
 TcpServer::TcpServer(int port, const char *name, size_t thread_num)
-    : loop_(), addr_(port), server_(&loop_, addr_, name)
+    : loopThread(), addr_(port)
 {
-    server_.setThreadNum(thread_num);
+    auto loop_ = loopThread.startLoop();
+    server_ = std::make_shared<muduo::net::TcpServer>(loop_, addr_, name);
+    server_->setThreadNum(thread_num);
 }
 
 TcpServer::~TcpServer() = default;
 
 void TcpServer::setMessageCallback(const muduo::net::MessageCallback &cb)
 {
-    server_.setMessageCallback(cb);
+    server_->setMessageCallback(cb);
 }
 
 void TcpServer::Start()
 {
-    server_.start();
-    loop_.loop();
+    if (server_) {
+        // 在子线程内启动
+        server_->getLoop()->runInLoop([this]{
+            server_->start();
+        });
+    }
+}
+
+void TcpServer::Stop() {
+    
+    if (server_) {
+        // 【核心修复】将销毁工作投递到 IO 线程！
+        server_->getLoop()->runInLoop([this]() {
+            // 在 IO 线程中销毁，assertInLoopThread() 检查完美通过！
+            auto loop = server_->getLoop();
+            server_.reset(); 
+            // 销毁完毕后，安全退出事件循环
+            loop->quit();
+        });
+    }
 }
 
 } // namespace minirpc

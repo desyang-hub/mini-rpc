@@ -9,6 +9,8 @@
 #include <muduo/net/TcpServer.h>
 #include <muduo/net/EventLoop.h>
 #include <muduo/net/InetAddress.h>
+#include <muduo/net/EventLoopThread.h>
+#include <memory>
 
 namespace minirpc
 {
@@ -25,10 +27,12 @@ public:
 
     void Start();
 
+    void Stop();
+
 private:
-    muduo::net::EventLoop loop_;
+    muduo::net::EventLoopThread loopThread;
     muduo::net::InetAddress addr_;
-    muduo::net::TcpServer server_;
+    std::shared_ptr<muduo::net::TcpServer> server_;
 };
 
 

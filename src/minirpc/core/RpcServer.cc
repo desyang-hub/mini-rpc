@@ -4,7 +4,7 @@
  * @Author       : desyang
  * @Date         : 2026-06-08 16:19:14
  * @LastEditors  : desyang
- * @LastEditTime : 2026-06-16 16:59:24
+ * @LastEditTime : 2026-06-17 15:40:15
 **/
 
 #include "minirpc/core/RpcServer.h"
@@ -33,7 +33,7 @@ RpcServer::RpcServer() : is_close_(false) {
 
 RpcServer::~RpcServer() {
     {
-        std::lock_guard<std::mutex> lock(instance_mutex_);
+        std::lock_guard<std::mutex> lock(close_mutex_);
         is_close_ = true;
     }
     condition_.notify_all();
@@ -54,8 +54,22 @@ void RpcServer::Start(int port, const char* name) {
     registerWorker_ = std::thread(&RpcServer::ServiceRegisterWorker, this);
 
     tcpServer_ = std::make_unique<TcpServer>(port, name);
-    tcpServer_->setMessageCallback(std::bind(&RpcServer::Handler, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
+    tcpServer_->setMessageCallback(std::bind(&RpcServer::MessageHandler, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
     tcpServer_->Start();
+
+    std::unique_lock<std::mutex> lock(close_mutex_);
+    close_condition_.wait(lock, [this]{
+        return is_close_;
+    });
+}
+
+void RpcServer::Stop() {
+    tcpServer_->Stop();
+    {
+        std::lock_guard<std::mutex> lock(close_mutex_);
+        is_close_ = true;
+    }
+    close_condition_.notify_all();
 }
 
 void RpcServer::addServiceInstance(const char* name, const char* groupName, const char* clusterName) {
@@ -101,7 +115,7 @@ void RpcServer::ShowAllService() {
     }
 }
 
-void RpcServer::Handler(const muduo::net::TcpConnectionPtr& conn,
+void RpcServer::MessageHandler(const muduo::net::TcpConnectionPtr& conn,
     muduo::net::Buffer* buf,
     muduo::Timestamp t) {
     // 这是回调函数，当有请求消息从用户端发送过来

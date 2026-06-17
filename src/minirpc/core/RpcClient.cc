@@ -4,7 +4,7 @@
  * @Author       : desyang
  * @Date         : 2026-06-08 15:18:23
  * @LastEditors  : desyang
- * @LastEditTime : 2026-06-16 19:19:44
+ * @LastEditTime : 2026-06-17 15:22:22
 **/
 
 #include "minirpc/core/RpcClient.h"
@@ -21,6 +21,7 @@
 #include <muduo/net/TcpClient.h>
 #include <muduo/net/EventLoop.h>
 #include <muduo/net/Callbacks.h>
+#include <memory>
 
 #include <iostream>
 
@@ -165,10 +166,12 @@ void RpcClient::MessageHandler(const muduo::net::TcpConnectionPtr& conn, muduo::
 void RpcClient::ServiceSearchWorker() {
     nacos::Properties configProps;
     configProps[nacos::PropertyKeyConst::SERVER_ADDR] = "127.0.0.1";
-    nacos::INacosServiceFactory *factory = nacos::NacosFactoryFactory::getNacosFactory(configProps);
-    nacos::ResourceGuard <nacos::INacosServiceFactory> _guardFactory(factory);
-    nacos::NamingService *namingSvc = factory->CreateNamingService();
-    nacos::ResourceGuard <nacos::NamingService> _guardService(namingSvc);
+    std::unique_ptr<nacos::INacosServiceFactory> factory = std::unique_ptr<nacos::INacosServiceFactory>(nacos::NacosFactoryFactory::getNacosFactory(configProps));
+    // nacos::ResourceGuard <nacos::INacosServiceFactory> _guardFactory(factory);
+    std::unique_ptr<nacos::NamingService> namingSvc = 
+    std::unique_ptr<nacos::NamingService>(factory->CreateNamingService());
+    // nacos::ResourceGuard <nacos::NamingService> _guardService(namingSvc);
+
 
     while (true) {
         ServiceSearchHandler work;
@@ -179,17 +182,17 @@ void RpcClient::ServiceSearchWorker() {
                 return !workers_.empty() || is_close;
             });
 
+            if (is_close) {
+                break;
+            }
+
             if (!workers_.empty()) {
                 work = std::move(workers_.front());
                 workers_.pop();
             }
-
-            if (is_close) {
-                break;
-            }
         }
 
-        work(namingSvc);
+        work(namingSvc.get());
     }
 }
 

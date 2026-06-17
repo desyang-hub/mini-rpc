@@ -4,7 +4,7 @@
  * @Author       : desyang
  * @Date         : 2026-06-08 15:18:23
  * @LastEditors  : desyang
- * @LastEditTime : 2026-06-16 19:20:40
+ * @LastEditTime : 2026-06-17 15:39:07
 **/
 #pragma once
 
@@ -173,7 +173,9 @@ inline std::future<Response> RpcClient::AsyncInvoke(const char* name, const Byte
 
 template<class R>
 R RpcClient::Invoke(const char* name, const Bytes& bytes, uint64_t request_id) {
-    Response res = AsyncInvoke(name, bytes, request_id).get();
+    auto fut = AsyncInvoke(name, bytes, request_id);
+    Response res = get_with_timeout(fut, std::chrono::milliseconds(200));
+    // Response res = AsyncInvoke(name, bytes, request_id).get();
     if (res.state != SUCCESS) {
         // 默认如果失败的话 res.data 就装异常就好了
         throw RpcException(res.data);

@@ -4,7 +4,7 @@
  * @Author       : desyang
  * @Date         : 2026-06-08 16:19:14
  * @LastEditors  : desyang
- * @LastEditTime : 2026-06-15 18:44:53
+ * @LastEditTime : 2026-06-17 14:58:12
 **/
 #pragma once
 
@@ -55,6 +55,9 @@ private:
     mutable std::mutex instance_mutex_;
     std::condition_variable condition_;
 
+    mutable std::mutex close_mutex_;
+    std::condition_variable close_condition_;
+
     // 此处实现注册逻辑
     void ServiceRegisterWorker();
 
@@ -67,6 +70,8 @@ public:
     ~RpcServer();
 
     void Start(int port = 8080, const char* name = "TcpServer");
+
+    void Stop();
 
     static RpcServer& GetInstance();
 
@@ -84,7 +89,7 @@ public:
 
     void ShowAllService();
 
-    void Handler(const muduo::net::TcpConnectionPtr& conn,
+    void MessageHandler(const muduo::net::TcpConnectionPtr& conn,
         muduo::net::Buffer* buf,
         muduo::Timestamp t);
 };
