@@ -36,7 +36,15 @@ jobs:
 
     # ==================== 构建 ====================
     - name: Build
-      run: cmake --build ${{ github.workspace }}/build --config ${{ env.BUILD_TYPE }} -j$(nproc)
+      run: |
+        set -eo pipefail
+        cmake --build ${{ github.workspace }}/build --config ${{ env.BUILD_TYPE }} -j$(nproc) 2>&1 | tee build.log || {
+          echo "================ BUILD FAILED ================="
+          echo "Extracting actual errors from full log:"
+          grep -iE "(error:|fatal error:|undefined reference|multiple definition|FAILED:)" build.log || true
+          echo "==============================================="
+          exit 1
+        }
 
     # ==================== 测试 ====================
     - name: Test

@@ -1,2 +1,7 @@
 all:
-	cmake -B build -DBUILD_EXAMPLES=ON && cmake --build build -j4
+	bash build.sh
+
+clean:
+	rm -rf build
+
+.PHONY: all clean

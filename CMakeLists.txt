@@ -11,7 +11,7 @@ message(STATUS "Build minirpc: ${MINIRPC_VERSION}")
 set(CMAKE_CXX_STANDARD 17) # equal -std=c++17
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-option(BUILD_EXAMPLES ON)
+option(BUILD_EXAMPLES OFF)
 message(STATUS "Build examples: ${BUILD_EXAMPLES}")
 
 set(LIB_TYPE "")
