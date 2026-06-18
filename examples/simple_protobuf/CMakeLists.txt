@@ -57,10 +57,17 @@ target_link_libraries(client_protobuf
     core
 )
 
-target_link_libraries(server_protobuf 
+target_link_libraries(server_protobuf
     ${Protobuf_LIBRARIES}
     net
     protocol
     protobuf
     core
+)
+
+# Copy config.toml next to executables
+configure_file(
+    ${CMAKE_CURRENT_SOURCE_DIR}/config.toml
+    ${CMAKE_CURRENT_BINARY_DIR}/config.toml
+    COPYONLY
 )

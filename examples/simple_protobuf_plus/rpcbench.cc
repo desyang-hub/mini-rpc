@@ -9,6 +9,7 @@
 #include "UserService.h"
 #include "user.pb.h"
 #include "minirpc/common/ThreadPool.h"
+#include "minirpc/common/Config.h"
 
 // 全局统计变量
 std::atomic<size_t> g_success{0};
@@ -54,12 +55,15 @@ void print_usage(const char* prog_name) {
 }
 
 int main(int argc, char* argv[]) {
+    // 0. Load config
+    auto cfg = minirpc::loadConfig();
+
     // 1. 默认参数
     int concurrency = 100;
     int total_requests = 10000;
     int per_thread_requests = 100;
     std::string host = "127.0.0.1";
-    int port = 8083;
+    int port = cfg.port;
 
     // 2. 使用 getopt 解析命令行参数
     int opt;
@@ -83,7 +87,10 @@ int main(int argc, char* argv[]) {
     std::cout << "===================================================" << std::endl;
 
     std::chrono::_V2::system_clock::time_point global_start;
-    // 4. 启动线程池并分发任务
+    // 4. Init RpcClient with Nacos address from config
+    minirpc::RpcClient::GetInstance().init(cfg.registry_address);
+
+    // 5. 启动线程池并分发任务
     {
         minirpc::ThreadPool pool(concurrency);
         size_t base_reqs = total_requests / concurrency;

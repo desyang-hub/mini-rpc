@@ -1,0 +1,10 @@
+# MiniRPC Server Configuration
+[server]
+port = 8084
+listen_host = "0.0.0.0"
+
+# Service Registry (Nacos)
+[registry]
+address = "127.0.0.1:8848"
+group = "DefaultGroup"
+cluster = "DefaultCluster"

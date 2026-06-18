@@ -63,6 +63,11 @@ add_library(common ${LIB_TYPE}
     ${COMMON_SOURCE}
 )
 
+# toml++ header-only — lives in include/toml++
+target_include_directories(common SYSTEM PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
+
 # 为 common 添加包含目录
 target_include_directories(common PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>

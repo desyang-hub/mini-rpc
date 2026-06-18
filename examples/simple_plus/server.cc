@@ -1,4 +1,5 @@
 #include "minirpc/core/RpcServer.h"
+#include "minirpc/common/Config.h"
 
 #include <iostream>
 
@@ -9,8 +10,8 @@ using namespace minirpc;
 
 int main(int argc, char const *argv[])
 {
-    
-    RpcServer::GetInstance().Start(8082);
+    auto cfg = minirpc::loadConfig();
+    RpcServer::GetInstance().Start(cfg.port, "RpcServer", cfg.registry_address.c_str());
     return 0;
 
     // std::string srvName = "aaa";

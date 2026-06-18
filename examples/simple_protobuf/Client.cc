@@ -1,11 +1,15 @@
 #include "UserService.h"
 #include "minirpc/protocol/Serialize.h"
+#include "minirpc/common/Config.h"
 #include "user.pb.h"
 
 using namespace example;
 
 int main(int argc, char const *argv[])
 {
+    auto cfg = minirpc::loadConfig();
+    minirpc::RpcClient::GetInstance().init(cfg.registry_address);
+
     UserServiceProtobuf::UserServiceProtobuf_Stub stub;
 
     User user;

@@ -49,6 +49,13 @@ add_executable(rpcbench
     ${PROTO_SRC}
 )
 
+# Copy config.toml next to executables
+configure_file(
+    ${CMAKE_CURRENT_SOURCE_DIR}/config.toml
+    ${CMAKE_CURRENT_BINARY_DIR}/config.toml
+    COPYONLY
+)
+
 # === 6. 设置头文件搜索路径（生成的 .pb.h 在构建目录）===
 target_include_directories(client_protobuf_plus 
     PRIVATE ${CMAKE_CURRENT_BINARY_DIR}

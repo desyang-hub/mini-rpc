@@ -78,6 +78,7 @@ private:
     mutable std::shared_mutex cacheMutex_;
 
     std::unique_ptr<nacos::NamingService> namingSvc_;
+    std::string nacos_addr_;
     // serviceName -> listener 映射（shared_ptr + NoDelete，SDK 管理生命周期）
     std::unordered_map<std::string, ListenerPtr> listeners_;
 
@@ -88,7 +89,7 @@ private:
     mutable std::mutex subscribeMutex_;
 
 public:
-    ServiceInstanceCache();
+    explicit ServiceInstanceCache(const std::string& nacosAddr = "127.0.0.1");
     ~ServiceInstanceCache();
 
     /// @brief 订阅指定服务名，后续该服务的实例变更会回调到 listener

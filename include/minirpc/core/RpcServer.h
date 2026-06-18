@@ -53,6 +53,7 @@ private:
     
     std::unique_ptr<TcpServer> tcpServer_;
     int port_;
+    std::string nacos_addr_;
 
     std::thread registerWorker_;
     std::queue<nacos::Instance> instances_;
@@ -74,7 +75,9 @@ public:
 
     ~RpcServer();
 
-    void Start(int port = 8080, const char* name = "TcpServer");
+    void Start(int port = 8080,
+               const char* name = "TcpServer",
+               const char* nacosAddr = "127.0.0.1");
 
     void Stop();
 

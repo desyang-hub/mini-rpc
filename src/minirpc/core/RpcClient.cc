@@ -45,6 +45,10 @@ RpcClient::RpcClient() : id_(0), connMgr_() {
 // 析构函数
 RpcClient::~RpcClient() = default;
 
+void RpcClient::init(const std::string& nacosAddr) {
+    serviceCache_ = std::make_unique<ServiceInstanceCache>(nacosAddr);
+}
+
 // 消息回调函数 — 由 muduo IO 线程调用
 void RpcClient::MessageHandler(const muduo::net::TcpConnectionPtr& conn, muduo::net::Buffer* buf, muduo::Timestamp t) {
     // 1. 尝试接收完整的 package

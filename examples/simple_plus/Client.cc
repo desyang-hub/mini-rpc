@@ -1,7 +1,11 @@
 #include "UserService.h"
+#include "minirpc/common/Config.h"
 
 int main(int argc, char const *argv[])
 {
+    auto cfg = minirpc::loadConfig();
+    minirpc::RpcClient::GetInstance().init(cfg.registry_address);
+
     UserService::UserService_Stub stub;
 
     try

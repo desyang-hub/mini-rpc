@@ -48,8 +48,9 @@ RpcServer& RpcServer::GetInstance() {
     return rpcServer;
 }
 
-void RpcServer::Start(int port, const char* name) {
+void RpcServer::Start(int port, const char* name, const char* nacosAddr) {
     port_ = port;
+    nacos_addr_ = nacosAddr;
     // 启用后台常驻注册程序
     registerWorker_ = std::thread(&RpcServer::ServiceRegisterWorker, this);
 
@@ -177,7 +178,7 @@ void RpcServer::MessageHandler(const muduo::net::TcpConnectionPtr& conn,
 void RpcServer::ServiceRegisterWorker() {
     // 启动注册服务
     nacos::Properties configProps;
-    configProps[nacos::PropertyKeyConst::SERVER_ADDR] = "127.0.0.1"; // 注册中心地址，后续使用配置文件 + 域名来替换
+    configProps[nacos::PropertyKeyConst::SERVER_ADDR] = nacos_addr_.empty() ? "127.0.0.1" : nacos_addr_;
     nacos::INacosServiceFactory *factory = nacos::NacosFactoryFactory::getNacosFactory(configProps);
     nacos::ResourceGuard<nacos::INacosServiceFactory> _guardFactory(factory);
 

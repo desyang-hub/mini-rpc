@@ -123,7 +123,8 @@ public:
         // cnt_.fetch_add(1, std::memory_order_relaxed);
 
         // 如果连接不存在，那么创建连接
-        auto newTcpClient = std::make_shared<TcpClient>(eps[0], connMgr);
+        // 采用轮询算法选择某个节点进行服务
+        auto newTcpClient = std::make_shared<TcpClient>(eps[cnt_.load() % eps.size()], connMgr);
 
         if (!messageCallback_)
         {

@@ -11,11 +11,12 @@
 namespace minirpc
 {
 
-ServiceInstanceCache::ServiceInstanceCache()
+ServiceInstanceCache::ServiceInstanceCache(const std::string& nacosAddr)
+    : nacos_addr_(nacosAddr)
 {
     // 创建 Nacos 工厂
     nacos::Properties configProps;
-    configProps[nacos::PropertyKeyConst::SERVER_ADDR] = "127.0.0.1:8848";
+    configProps[nacos::PropertyKeyConst::SERVER_ADDR] = nacos_addr_.empty() ? "127.0.0.1:8848" : nacos_addr_;
     nacos::INacosServiceFactory* factory =
         nacos::NacosFactoryFactory::getNacosFactory(configProps);
     nacos::ResourceGuard<nacos::INacosServiceFactory> _guardFactory(factory);

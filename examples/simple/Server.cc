@@ -1,14 +1,12 @@
 #include "minirpc/core/RpcServer.h"
+#include "minirpc/common/Config.h"
 
 #include <iostream>
 
-// ./server 8080
-// nacos的注册模块仅允许一个实例运行，同一主机无法运行多个nacos实例
 int main(int argc, char const *argv[])
 {
-    // 启用net模块进行网络连接
-    minirpc::RpcServer::GetInstance().Start(8081);
-    
+    auto cfg = minirpc::loadConfig();
+    minirpc::RpcServer::GetInstance().Start(cfg.port, "RpcServer", cfg.registry_address.c_str());
 
     return 0;
 }

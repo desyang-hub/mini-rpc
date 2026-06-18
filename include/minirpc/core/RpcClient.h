@@ -50,6 +50,10 @@ public:
 
     ~RpcClient();
 
+    /// @brief Set Nacos registry address and initialize the service instance cache.
+    ///        Must be called once before any RPC invocation.
+    void init(const std::string& nacosAddr);
+
     // 获取单实例
     static RpcClient& GetInstance();
 
@@ -71,8 +75,8 @@ private:
 
     ConnectionManager connMgr_;
 
-    // Nacos 服务实例订阅缓存（替代原来的 ServiceSearchWorker + 队列模式）
-    ServiceInstanceCache serviceCache_;
+    // Nacos 服务实例订阅缓存（延迟初始化，通过 init() 设置 Nacos 地址）
+    std::unique_ptr<ServiceInstanceCache> serviceCache_;
 
     // 消息回调函数
     void MessageHandler(const muduo::net::TcpConnectionPtr& conn, muduo::net::Buffer* buf, muduo::Timestamp t);
@@ -111,10 +115,13 @@ R RpcClient::Call(const char* serviceName, const char* name, Args&& ...args) {
 
 inline std::future<Response> RpcClient::AsyncInvoke(const char* name, const Bytes& bytes, uint64_t request_id) {
     // 首次调用时订阅该服务
-    serviceCache_.subscribeService(name);
+    if (!serviceCache_) {
+        throw RpcException("RpcClient not initialized. Call RpcClient::init() first.");
+    }
+    serviceCache_->subscribeService(name);
 
     // 从订阅缓存中读取实例列表（无阻塞，无网络 IO）
-    std::list<nacos::Instance> instances = serviceCache_.getInstances(name);
+    std::list<nacos::Instance> instances = serviceCache_->getInstances(name);
 
     if (instances.empty()) {
         LOG_ERROR("No instances available for service: %s", name);

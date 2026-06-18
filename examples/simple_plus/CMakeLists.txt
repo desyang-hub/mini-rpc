@@ -34,5 +34,12 @@ target_link_libraries(server_p PRIVATE
 )
 
 
+# Copy config.toml next to executables
+configure_file(
+    ${CMAKE_CURRENT_SOURCE_DIR}/config.toml
+    ${CMAKE_CURRENT_BINARY_DIR}/config.toml
+    COPYONLY
+)
+
 # target_compile_options(server_p PRIVATE -fsanitize=address -fno-omit-frame-pointer -O1)
 # target_link_options(server_p PRIVATE -fsanitize=address)

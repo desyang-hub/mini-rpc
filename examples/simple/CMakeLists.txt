@@ -23,3 +23,10 @@ target_link_libraries(server PRIVATE
     common
     nlohmann_json::nlohmann_json
 )
+
+# Copy config.toml next to executables
+configure_file(
+    ${CMAKE_CURRENT_SOURCE_DIR}/config.toml
+    ${CMAKE_CURRENT_BINARY_DIR}/config.toml
+    COPYONLY
+)

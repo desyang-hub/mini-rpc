@@ -1,11 +1,15 @@
 #include "UserService.h"
 #include "UserServiceJson.h" // 这个头文件直接来自simple_plus中的头文件，直接使用，无需cpp文件
 #include "user.pb.h"
+#include "minirpc/common/Config.h"
 
 using namespace example;
 
 int main(int argc, char const *argv[])
 {
+    auto cfg = minirpc::loadConfig();
+    minirpc::RpcClient::GetInstance().init(cfg.registry_address);
+
     UserServiceProtobuf::UserServiceProtobuf_Stub stub;
 
     User user;
