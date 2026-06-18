@@ -14,11 +14,11 @@
 #include "minirpc/common/utils.h"
 #include "minirpc/core/PendingRequest.h"
 #include "minirpc/core/ServiceInstanceCache.h"
+#include "minirpc/core/macro/rpc_service_stub.h"
 #include "minirpc/net/ConnectionManager.h"
 #include "minirpc/net/TcpClient.h"
 #include "minirpc/protocol/Encoder.h"
 #include "minirpc/protocol/Serialize.h"
-#include "minirpc/core/macro/rpc_service_stub.h"
 
 #include <muduo/net/Buffer.h>
 #include <muduo/net/TcpClient.h>

@@ -16,12 +16,13 @@ namespace minirpc
     
 namespace
 {
-    const size_t DEFAULT_THREAD_POOL_SIZE = 4;
-    using TaskHandler = std::function<void()>;   
+    const size_t DEFAULT_THREAD_POOL_SIZE = std::thread::hardware_concurrency();   
 } // namespace
 
 class ThreadPool
 {
+public:
+    using TaskHandler = std::function<void()>;
 private:
     std::queue<TaskHandler> queue_;
     std::vector<std::thread> workers_;

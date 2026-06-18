@@ -3,6 +3,13 @@ cmake_minimum_required(VERSION 3.20)
 project(minirpc VERSION 3.2.0)
 message(STATUS "Build minirpc: ${PROJECT_VERSION}")
 
+# Version management - generates version.h from cmake/version.h.in
+configure_file(
+    "${CMAKE_CURRENT_SOURCE_DIR}/cmake/version.h.in"
+    "${CMAKE_CURRENT_BINARY_DIR}/include/minirpc/version.h"
+    @ONLY
+)
+
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
@@ -43,6 +50,7 @@ add_library(common ${COMMON_SOURCE})
 target_include_directories(common
     PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include>
         $<INSTALL_INTERFACE:include>
     SYSTEM PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/include  # for toml++
