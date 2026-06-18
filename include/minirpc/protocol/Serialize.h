@@ -2,64 +2,65 @@
 
 #include "minirpc/protocol/JsonSerialize.h"
 #include "minirpc/protocol/ProtobufSerialize.h"
-#include "minirpc/common/RpcException.h"
 
 #include <google/protobuf/message.h>
 
-#include <cstdint>
 #include <cstddef>
+#include <cstdint>
 
 namespace minirpc
 {
 
+// Auto-detects protobuf vs JSON based on message type
 class Serialize
 {
 private:
-    JsonSerialize& json_serializer_;
-    ProtobufSerialize& protobuf_serializer_;
+    JsonSerialize& json_;
+    ProtobufSerialize& protobuf_;
 
-    Serialize() : json_serializer_(JsonSerialize::GetInstance()),
-        protobuf_serializer_(ProtobufSerialize::GetInstance()) {}
-
-    static Serialize& GetInstance() {
-        static Serialize serialize;
-        return serialize;
-    }
+    Serialize() : json_(JsonSerialize::GetInstance()), protobuf_(ProtobufSerialize::GetInstance()) {}
 
     template<class T>
-    std::string serialization(const T& obj) {
+    std::string doSerialize(const T& obj)
+    {
         if constexpr (std::is_base_of_v<google::protobuf::Message, T>) {
-            return protobuf_serializer_.serialization(obj);
+            return protobuf_.serialization(obj);
         } else {
-            return json_serializer_.serialization(obj);
+            return json_.serialization(obj);
         }
     }
 
     template<class T>
-    T deserialization(const void* data, size_t len) {
+    T doDeserialize(const void* data, size_t len)
+    {
         if constexpr (std::is_base_of_v<google::protobuf::Message, T>) {
-            return protobuf_serializer_.deserialization<T>(data, len);
+            return protobuf_.deserialization<T>(data, len);
         } else {
-            return json_serializer_.deserialization<T>(data, len);
+            return json_.deserialization<T>(data, len);
         }
     }
 
 public:
     template<class T>
-    static std::string Serialization(const T& obj) {
-        return GetInstance().serialization(obj);
+    static std::string Serialization(const T& obj)
+    {
+        static Serialize inst;
+        return inst.doSerialize(obj);
     }
 
     template<class T>
-    static T Deserialization(const std::string& data) {
-        return GetInstance().deserialization<T>(data.c_str(), data.size());
+    static T Deserialization(const std::string& data)
+    {
+        static Serialize inst;
+        return inst.doDeserialize<T>(data.c_str(), data.size());
     }
 
     template<class T>
-    static T Deserialization(const void* data, size_t len) {
-        return GetInstance().deserialization<T>(data, len);
+    static T Deserialization(const void* data, size_t len)
+    {
+        static Serialize inst;
+        return inst.doDeserialize<T>(data, len);
     }
 };
-
 
 } // namespace minirpc

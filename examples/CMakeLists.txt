@@ -1,11 +1,3 @@
-add_subdirectory(simple)
-
-add_subdirectory(protobuf_demo)
-
-add_subdirectory(config)
-
-add_subdirectory(simple_protobuf)
-
-add_subdirectory(simple_plus)
-
-add_subdirectory(simple_protobuf_plus)
+add_subdirectory(basic_json)
+add_subdirectory(basic_protobuf)
+add_subdirectory(protobuf_bench)

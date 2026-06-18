@@ -4,193 +4,122 @@
 #include "minirpc/common/Type.h"
 #include "minirpc/common/utils.h"
 
-
-// 编码的过程就是：填头 + 算CRC + 拼数据。
-
-#include <cstdint>   // 添加这行
-#include <cstddef>   // 可选，提供 size_t
-#include <vector>
 #include <cstring>
+#include <string>
+#include <vector>
 
 namespace minirpc
 {
 
-
-
 class Encoder
 {
 private:
-public:
-    static std::vector<uint8_t> Encode(ProtocolHeader& header, const std::string& body, uint8_t type = MSG_RESPONSE) {
-        header.body_len = body.size();
-        header.srv_name_len = 0;
-        // 计算checksum
-        header.checksum = simple_crc32(reinterpret_cast<const uint8_t*>(body.data()), header.body_len);
-
-               
-
-        std::vector<uint8_t> packet(sizeof(header) + header.srv_name_len + header.body_len);
-
-        // 将header拷贝到packet中
-        memcpy(packet.data(), &header, sizeof(header));
-
-        // 将srvName 拷贝到packet中
-        // memcpy(packet.data(), srvName.data(), header.srv_name_len);
-
-        // 将body拷贝到packet中
-        memcpy(packet.data() + sizeof(header) + header.srv_name_len, body.data(), header.body_len);
-
-        return packet;
-    }
-
-    // 编码
-    static Bytes Encode(const std::string& srvName, const std::string& body, uint8_t type = MSG_REQUEST) {
-        ProtocolHeader header;
-
-        // magic
-        header.magic = MAGIC_NUMBER;
-
-        // 消息类型
-        header.type = type;
-
-        // version
-        header.version = 1;
-
-        // srvNameLen
-        header.srv_name_len = srvName.size();
-
-        // bodyLen
-        header.body_len = body.size();
-
-        // 计算checksum（覆盖srv_name + body，防止srv_name被篡改）
-        Bytes crc_input(header.srv_name_len + header.body_len);
-        memcpy(crc_input.data(), srvName.data(), header.srv_name_len);
-        memcpy(crc_input.data() + header.srv_name_len, body.data(), header.body_len);
-        header.checksum = simple_crc32(crc_input.data(), crc_input.size());
-
-        std::vector<uint8_t> packet(sizeof(header) + header.srv_name_len + header.body_len);
-
-        // 将header拷贝到packet中
-        memcpy(packet.data(), &header, sizeof(header));
-
-        // 将srvName 拷贝到packet中
-        memcpy(packet.data() + sizeof(header), srvName.data(), header.srv_name_len);
-
-        // 将body拷贝到packet中
-        memcpy(packet.data() + sizeof(header) + header.srv_name_len, body.data(), header.body_len);
-
-        return packet;
-    }
-
-    // 编码，将必要的数据进行封装
-    static Bytes Encode(const char* name, const void* data, size_t len, uint8_t type = MSG_REQUEST) {
-        ProtocolHeader header;
-        int header_len = sizeof(header);
-
-        // magic
-        header.magic = MAGIC_NUMBER;
-
-        // 消息类型
-        header.type = type;
-
-        // version
-        header.version = 1;
-
-        // srvNameLen
-        header.srv_name_len = strlen(name);
-
-        // bodyLen
-        header.body_len = len;
-
-        size_t pkg_len = header_len + header.srv_name_len + len;
-
-        // 计算checksum（覆盖srv_name + body，防止srv_name被篡改）
-        Bytes crc_input(pkg_len + 4); // 剩下4字节是用于存放check_num
-        memcpy(crc_input.data(), &header, header_len);
-        memcpy(crc_input.data() + header_len, name, header.srv_name_len);
-        memcpy(crc_input.data() + header_len + header.srv_name_len, data, len);
-        uint32_t check_num = simple_crc32(crc_input.data(), pkg_len);
-        memcpy(crc_input.data() + pkg_len, &check_num, 4);
-
-        return crc_input;
-    }
-
-    static Bytes EncodeReq(uint64_t id, const char* name, const void* data, size_t len) {
-        ProtocolHeader header;
-        int header_len = sizeof(header);
-
-        // magic
-        header.magic = MAGIC_NUMBER;
-
-        header.request_id = id;
-
-        // 消息类型
-        header.type = MSG_REQUEST;
-
-        // version
-        header.version = 1;
-
-        // srvNameLen
-        header.srv_name_len = strlen(name);
-
-        // bodyLen
-        header.body_len = len;
-
-        size_t pkg_len = header_len + header.srv_name_len + len;
-
-        // 计算checksum（覆盖srv_name + body，防止srv_name被篡改）
-        Bytes crc_input(pkg_len + 4); // 剩下4字节是用于存放check_num
-        memcpy(crc_input.data(), &header, header_len);
-        memcpy(crc_input.data() + header_len, name, header.srv_name_len);
-        memcpy(crc_input.data() + header_len + header.srv_name_len, data, len);
-        uint32_t check_num = simple_crc32(crc_input.data(), pkg_len);
-        memcpy(crc_input.data() + pkg_len, &check_num, 4);
-
-        return crc_input;
-    }
-
-    // 这里是encode的基础实现，用于将header + srvNmae + body + check_num take package
-    static Bytes Encode(const ProtocolHeader& header, const char* name, const void* data) {
+    // Build packet: [header | srv_name | body | check_num(4B)]
+    // CRC covers header + srv_name + body
+    static Bytes buildPacket(const ProtocolHeader& header, const std::string& srvName)
+    {
         constexpr size_t header_len = sizeof(ProtocolHeader);
-        size_t pkg_len = header_len + header.srv_name_len + header.body_len;
+        size_t body_len   = header.body_len;
+        size_t name_len   = header.srv_name_len;
+        size_t pkg_len    = header_len + name_len + body_len;
 
-        // 计算checksum（覆盖srv_name + body，防止srv_name被篡改）
-        Bytes crc_input(pkg_len + 4); // 剩下4字节是用于存放check_num
-        memcpy(crc_input.data(), &header, header_len);
-        if (header.srv_name_len)
-            memcpy(crc_input.data() + header_len, name, header.srv_name_len);
-        if (header.body_len)
-            memcpy(crc_input.data() + header_len + header.srv_name_len, data, header.body_len);
-        uint32_t check_num = simple_crc32(crc_input.data(), pkg_len);
-        memcpy(crc_input.data() + pkg_len, &check_num, 4);
+        Bytes packet(pkg_len + 4);  // +4 for check_num at the end
+        size_t off = 0;
 
-        return crc_input;
+        memcpy(packet.data() + off, &header, header_len); off += header_len;
+        if (name_len) {
+            memcpy(packet.data() + off, srvName.data(), name_len); off += name_len;
+        }
+        /* body is appended in place by caller via the body_len field */
+
+        uint32_t check_num = simple_crc32(packet.data(), pkg_len);
+        memcpy(packet.data() + pkg_len, &check_num, 4);
+
+        return packet;
     }
 
-    static Bytes ErrorRes(uint64_t request_id, uint8_t errcode, const char* errmsg) {
+public:
+    // --- Request encoding ---
+
+    // Encode a request with service name and serialized body
+    static Bytes encodeRequest(const std::string& srvName, const std::string& body, uint64_t requestId)
+    {
         ProtocolHeader header;
-        header.code = errcode;
-        header.request_id = request_id;
-        header.srv_name_len = 0;
-        header.body_len = strlen(errmsg);
+        header.magic      = MAGIC_NUMBER;
+        header.version    = 1;
+        header.type       = MSG_REQUEST;
+        header.request_id = requestId;
+        header.srv_name_len = srvName.size();
+        header.body_len   = body.size();
 
-        return Encode(header, nullptr, errmsg);
+        size_t header_len = sizeof(ProtocolHeader);
+        size_t name_len   = header.srv_name_len;
+        size_t blen       = header.body_len;
+        size_t pkg_len    = header_len + name_len + blen;
+
+        Bytes packet(pkg_len + 4);
+
+        memcpy(packet.data(), &header, header_len);
+        if (name_len) memcpy(packet.data() + header_len, srvName.data(), name_len);
+        if (blen)     memcpy(packet.data() + header_len + name_len, body.data(), blen);
+
+        uint32_t check_num = simple_crc32(packet.data(), pkg_len);
+        memcpy(packet.data() + pkg_len, &check_num, 4);
+
+        return packet;
     }
 
-    static Bytes SuccessRes(uint64_t request_id, const void* data, size_t len) {
+    // --- Response encoding ---
+
+    static Bytes successResponse(uint64_t requestId, const std::string& body)
+    {
         ProtocolHeader header;
-        header.code = SUCCESS;
-        header.request_id = request_id;
+        header.magic      = MAGIC_NUMBER;
+        header.version    = 1;
+        header.type       = MSG_RESPONSE;
+        header.code       = SUCCESS;
+        header.request_id = requestId;
         header.srv_name_len = 0;
-        header.body_len = len;
+        header.body_len   = body.size();
 
-        return Encode(header, nullptr, data);
+        size_t header_len = sizeof(ProtocolHeader);
+        size_t pkg_len    = header_len + header.body_len;
+
+        Bytes packet(pkg_len + 4);
+
+        memcpy(packet.data(), &header, header_len);
+        if (header.body_len) memcpy(packet.data() + header_len, body.data(), header.body_len);
+
+        uint32_t check_num = simple_crc32(packet.data(), pkg_len);
+        memcpy(packet.data() + pkg_len, &check_num, 4);
+
+        return packet;
     }
 
-    static Bytes SuccessRes(uint64_t request_id, const Bytes& data) {
-        return SuccessRes(request_id, data.data(), data.size());
+    static Bytes errorResponse(uint64_t requestId, uint8_t code, const std::string& msg)
+    {
+        ProtocolHeader header;
+        header.magic      = MAGIC_NUMBER;
+        header.version    = 1;
+        header.type       = MSG_RESPONSE;
+        header.code       = code;
+        header.request_id = requestId;
+        header.srv_name_len = 0;
+        header.body_len   = msg.size();
+
+        size_t header_len = sizeof(ProtocolHeader);
+        size_t pkg_len    = header_len + header.body_len;
+
+        Bytes packet(pkg_len + 4);
+
+        memcpy(packet.data(), &header, header_len);
+        if (header.body_len) memcpy(packet.data() + header_len, msg.data(), header.body_len);
+
+        uint32_t check_num = simple_crc32(packet.data(), pkg_len);
+        memcpy(packet.data() + pkg_len, &check_num, 4);
+
+        return packet;
     }
 };
-
 
 } // namespace minirpc

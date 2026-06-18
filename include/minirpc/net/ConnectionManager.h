@@ -1,42 +1,34 @@
-/**
- * @FilePath     : /mini-rpc/include/minirpc/net/ConnectionManager.h
- * @Description  :
- * @Author       : desyang
- * @Date         : 2026-06-10 11:46:52
- * @LastEditors  : desyang
- * @LastEditTime : 2026-06-16 11:23:37
-**/
 #pragma once
 
-#include "minirpc/net/TcpClient.h"
-#include "minirpc/net/EndPoint.h"
-#include "minirpc/common/nonecopyable.h"
-#include <unordered_map>
-#include <mutex>
-#include <muduo/net/Callbacks.h>
+#include <memory>
 #include <vector>
+
+#include <muduo/net/Callbacks.h>
+
+#include "minirpc/common/nonecopyable.h"
+#include "minirpc/net/EndPoint.h"
+#include "minirpc/net/TcpClient.h"
 
 namespace minirpc
 {
 
-class ConnectionManager;
-
-// Forward declare implementation
-class ConnectionManagerImpl;
-
-// 连接管理器，用户可以通过 List<EndPoint> 来获取
+// Connection pool manager - manages TcpClient connections to multiple endpoints
 class ConnectionManager : public nonecopyable
 {
 public:
     ConnectionManager();
     ~ConnectionManager();
 
+    // Get or create a connection to a single endpoint
     TcpClientPtr getConnection(const EndPoint& ep);
 
+    // Get or create a connection from a list of endpoints
     TcpClientPtr getConnection(const std::vector<EndPoint>& eps);
 
+    // Set message callback for all connections
     void setMessageCallback(muduo::net::MessageCallback cb);
 
+    // Return a connection to the pool for reuse
     void recovery(TcpClientPtr ptr);
 
 private:

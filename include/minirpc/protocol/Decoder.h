@@ -1,15 +1,13 @@
 #pragma once
 
 #include "minirpc/protocol/Protocol.h"
-#include "minirpc/common/utils.h"
 #include "minirpc/common/Type.h"
 #include "minirpc/common/Response.h"
+#include "minirpc/common/utils.h"
 
-#include <vector>
-#include <cstring>
 #include <cstdint>
-#include <cstddef>
-#include <iostream>
+#include <cstring>
+#include <string>
 
 namespace minirpc
 {
@@ -17,207 +15,94 @@ namespace minirpc
 constexpr uint32_t MAX_BODY_SIZE = 64 * 1024 * 1024; // 64MB
 
 enum DecodeState : int8_t {
-    ERR = -1,
-    UN_FINISH = 0,
-    FINISHED = 1
+    ERR       = -1,
+    UN_FINISH =  0,
+    FINISHED  =  1
 };
 
 class Decoder
 {
 private:
-    // 共享的头部校验逻辑，返回已验证的头部指针，失败返回nullptr
-    static const ProtocolHeader* validateHeader(const Bytes& raw_data, int& error_code) {
-        constexpr int header_len = sizeof(ProtocolHeader);
+    static constexpr size_t hdr_len = sizeof(ProtocolHeader);
 
-        // 1. 长度不够
-        if (raw_data.size() < header_len) {
-            error_code = UN_FINISH;
-            return nullptr;
-        }
+    // Validate header and CRC; returns packet length (without check_num) or error
+    // >0 = valid packet length, 0 = incomplete, -1 = error
+    static int validate(const void* data, size_t len)
+    {
+        if (len < hdr_len) return 0;
 
-        // 2. 零拷贝头部解析
-        const ProtocolHeader* headerPtr = reinterpret_cast<const ProtocolHeader*>(raw_data.data());
+        const auto* hdr = reinterpret_cast<const ProtocolHeader*>(data);
+        if (hdr->magic != MAGIC_NUMBER) return -1;
+        if (hdr->body_len > MAX_BODY_SIZE) return -1;
 
-        // 3. 校验魔数
-        if (headerPtr->magic != MAGIC_NUMBER) {
-            std::cerr << "magic check error" << std::endl;
-            error_code = ERR;
-            return nullptr;
-        }
+        size_t pkg_len = hdr_len + hdr->srv_name_len + hdr->body_len;
+        if (pkg_len + 4 > len) return 0;  // check_num (4B) not yet received
 
-        // 3.5 限制最大包体大小，防止内存溢出
-        if (headerPtr->body_len > MAX_BODY_SIZE) {
-            std::cerr << "body too large: " << headerPtr->body_len << std::endl;
-            error_code = ERR;
-            return nullptr;
-        }
+        // CRC32 over header + srv_name + body
+        uint32_t expected = simple_crc32(data, pkg_len);
+        uint32_t actual;
+        memcpy(&actual, reinterpret_cast<const uint8_t*>(data) + pkg_len, 4);
+        if (expected != actual) return -1;
 
-        // 4. body 未完全接入
-        if (raw_data.size() < header_len + headerPtr->srv_name_len + headerPtr->body_len) {
-            error_code = UN_FINISH;
-            return nullptr;
-        }
-
-        // 5. 校验CRC32（覆盖srv_name + body）
-        if (simple_crc32(raw_data.data() + header_len, headerPtr->srv_name_len + headerPtr->body_len) != headerPtr->checksum) {
-            std::cerr << "crc32 check failed" << std::endl;
-            error_code = ERR;
-            return nullptr;
-        }
-
-        error_code = 0;
-        return headerPtr;
+        return static_cast<int>(pkg_len);
     }
 
 public:
-    // 解码完整包（包含service name和body）
-    static int Decode(const Bytes& raw_data, ProtocolHeader& header, std::string& srvName, std::string& body) {
-        int error_code;
-        const ProtocolHeader* headerPtr = validateHeader(raw_data, error_code);
-        if (!headerPtr) return error_code;
+    // --- Length check (used by MessageHandler to determine if full packet is in buffer) ---
 
-        constexpr int header_len = sizeof(ProtocolHeader);
-
-        // 拷贝service name
-        srvName = std::string(reinterpret_cast<const char*>(raw_data.data() + header_len), headerPtr->srv_name_len);
-
-        // 拷贝body
-        header = *headerPtr;
-        body = std::string(reinterpret_cast<const char*>(raw_data.data() + header_len + headerPtr->srv_name_len), headerPtr->body_len);
-
-        return FINISHED;
+    // Returns: >0 = packet length to consume (including check_num), 0 = need more data, -1 = error
+    static int check(const void* data, size_t len)
+    {
+        int r = validate(data, len);
+        return (r > 0) ? r + 4 : (r == 0) ? 0 : -1;
     }
 
-    // 解码包（仅body，不含service name）
-    static bool Decode(const Bytes& raw_data, ProtocolHeader& header, std::string& body) {
-        int error_code;
-        const ProtocolHeader* headerPtr = validateHeader(raw_data, error_code);
-        if (!headerPtr) return error_code == UN_FINISH ? false : false;
+    // Legacy alias - same as check()
+    static int Decode(const void* data, size_t len) { return check(data, len); }
 
-        constexpr int header_len = sizeof(ProtocolHeader);
+    // --- Data extraction ---
 
-        // 拷贝body
-        header = *headerPtr;
-        body = std::string(reinterpret_cast<const char*>(raw_data.data() + header_len + headerPtr->srv_name_len), headerPtr->body_len);
+    // Extract service name and body; returns request_id
+    static uint64_t decode(const void* data, std::string& srvName, std::string& body)
+    {
+        const auto* hdr = reinterpret_cast<const ProtocolHeader*>(data);
+        const uint8_t* p = reinterpret_cast<const uint8_t*>(data) + hdr_len;
 
-        return true;
-    }
-
-    // 仅校验包完整性，返回包总长度或错误码
-    static int Check(const Bytes& raw_data) {
-        int error_code;
-        const ProtocolHeader* headerPtr = validateHeader(raw_data, error_code);
-        if (!headerPtr) return error_code;
-
-        constexpr int header_len = sizeof(ProtocolHeader);
-        return header_len + headerPtr->srv_name_len + headerPtr->body_len;
-    }
-
-
-    /// @brief 对数据进行解码
-    /// @param data 数据首地址
-    /// @param len 数据长度
-    /// @return -1 | 0 | > 0 => error, unfinish, accept
-    // static int Decode(const void* data, int len) {
-    //     int header_len = sizeof(ProtocolHeader);
-    //     // 头长度是否足够
-    //     if (len < header_len) {
-    //         return UN_FINISH;
-    //     }
-
-    //     // 头部解析
-    //     const ProtocolHeader* headerPtr = reinterpret_cast<const ProtocolHeader*>(data);
-
-    //     // 检验魔数
-    //     if (headerPtr->magic != MAGIC_NUMBER) {
-    //         // 魔数校验不匹配
-    //         return ERR;
-    //     }
-
-    //     // 计算包长度
-    //     int pkg_len = header_len + headerPtr->srv_name_len + headerPtr->body_len;
-
-    //     // 整个数据包完整性验证
-    //     if (pkg_len + 4 > len) { // 末尾四字节包含check_num
-    //         return UN_FINISH;
-    //     }
-
-    //     // CRC整个数据包校验
-    //     if (simple_crc32(data, pkg_len) != *(reinterpret_cast<uint32_t*>((char*)data + pkg_len))) {
-    //         // crc数据校验不通过，数据出错，这个应该要触发重传才对
-    //         return ERR;
-    //     }
-
-    //     return pkg_len + 4;
-    // }
-
-
-    static int Decode(const void* data, size_t len) {
-        int header_len = sizeof(ProtocolHeader);
-        // 头长度是否足够
-        if (len < header_len) {
-            return UN_FINISH;
+        if (hdr->srv_name_len) {
+            srvName.assign(reinterpret_cast<const char*>(p), hdr->srv_name_len);
+            p += hdr->srv_name_len;
         }
 
-        // 头部解析
-        const ProtocolHeader* headerPtr = reinterpret_cast<const ProtocolHeader*>(data);
-
-        // 检验魔数
-        if (headerPtr->magic != MAGIC_NUMBER) {
-            // 魔数校验不匹配
-            return ERR;
+        if (hdr->body_len) {
+            body.assign(reinterpret_cast<const char*>(p), hdr->body_len);
         }
 
-        // 计算包长度
-        int pkg_len = header_len + headerPtr->srv_name_len + headerPtr->body_len;
-
-        // 整个数据包完整性验证
-        if (pkg_len + 4 > len) { // 末尾四字节包含check_num
-            return UN_FINISH;
-        }
-
-        // CRC整个数据包校验
-        if (simple_crc32(data, pkg_len) != *(reinterpret_cast<uint32_t*>((char*)data + pkg_len))) {
-            // crc数据校验不通过，数据出错，这个应该要触发重传才对
-            return ERR;
-        }
-
-        return pkg_len + 4; // 需要retrive的长度
+        return hdr->request_id;
     }
 
+    // Legacy alias
+    static uint64_t Decode(const void* data, std::string& srvName, std::string& body)
+    { return decode(data, srvName, body); }
 
-    // 解码完整包（包含service name和body）
-    static uint64_t Decode(const void* data, std::string& srvName, std::string& body) {
-        ProtocolHeader* header = (ProtocolHeader*)(data);
-        constexpr int len = sizeof(ProtocolHeader);
-
-        srvName = std::string((char*)data + len, header->srv_name_len);
-        body = std::string((char*)data + len + header->srv_name_len, header->body_len);
-
-        return header->request_id;
+    // Extract with response code
+    static uint64_t Decode(const void* data, std::string& srvName, std::string& body, uint8_t& code)
+    {
+        const auto* hdr = reinterpret_cast<const ProtocolHeader*>(data);
+        code = hdr->code;
+        return decode(data, srvName, body);
     }
 
-    static uint64_t Decode(const void* data, std::string& srvName, std::string& body, uint8_t& code) {
-        ProtocolHeader* header = (ProtocolHeader*)(data);
-        constexpr int len = sizeof(ProtocolHeader);
-
-        code = header->code;
-        srvName = std::string((char*)data + len, header->srv_name_len);
-        body = std::string((char*)data + len + header->srv_name_len, header->body_len);
-
-        return header->request_id;
-    }
-
-
-    static int Decode(const void* data, Response& resp) {
+    // Decode into Response struct; returns request_id
+    static int Decode(const void* data, Response& resp)
+    {
+        std::string srvName;
         std::string body;
-        std::string name;
         uint8_t code;
-        uint64_t rid = Decode(data, name, body, code);
-        resp = Response{code, std::move(body)};
-        return rid;
+        uint64_t rid = Decode(data, srvName, body, code);
+        resp.state = code;
+        resp.data  = std::move(body);
+        return static_cast<int>(rid);
     }
-
 };
 
 } // namespace minirpc

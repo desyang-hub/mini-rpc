@@ -1,18 +1,8 @@
-/**
- * @FilePath     : /mini-rpc/src/minirpc/net/ConnectionManager.cc
- * @Description  : ConnectionManager implementation
- * @Author       : desyang
- * @Date         : 2026-06-10 11:46:52
-**/
 #include "minirpc/net/ConnectionManager.h"
-#include "minirpc/net/TcpClient.h"
-#include "minirpc/net/EndPoint.h"
-#include "minirpc/common/logger.h"
 #include "minirpc/common/RpcException.h"
-#include <memory>
-#include <queue>
+#include "minirpc/common/logger.h"
 
-#include <iostream>
+#include <queue>
 
 namespace minirpc
 {
@@ -20,162 +10,116 @@ namespace minirpc
 class ConnectionManager::Impl
 {
 private:
-    std::unordered_map<EndPoint, std::queue<TcpClientPtr>> tcpClients_;
+    std::unordered_map<EndPoint, std::queue<TcpClientPtr>> pool_;
     mutable std::mutex mutex_;
     muduo::net::MessageCallback messageCallback_;
     std::atomic<size_t> cnt_{0};
     std::condition_variable condition_;
 
 public:
-    TcpClientPtr getConnection(const EndPoint& ep, ConnectionManager* connMgr)
+    TcpClientPtr getConnection(const EndPoint& ep, ConnectionManager* mgr)
     {
-        // 如果连接本来就存在，那么就直接返回可用连接
+        // Check pool first
         {
             std::lock_guard<std::mutex> lock(mutex_);
-            auto it = tcpClients_.find(ep);
-            if (it != tcpClients_.end() && !it->second.empty())
-            {
-                auto t = std::move(it->second.front());
+            auto it = pool_.find(ep);
+            if (it != pool_.end() && !it->second.empty()) {
+                auto conn = std::move(it->second.front());
                 it->second.pop();
-                return t;
+                // Clean up empty queues
+                if (it->second.empty()) pool_.erase(it);
+                return conn;
             }
         }
 
-        // 如果连接不存在，那么创建连接
-        auto newTcpClient = std::make_shared<TcpClient>(ep, connMgr);
-
-        // 设置消息回调
-        newTcpClient->setMessageCallback(messageCallback_);
-
-        newTcpClient->Start();
-
-        return newTcpClient;
+        // Create new connection
+        auto conn = std::make_shared<TcpClient>(ep, mgr);
+        conn->setMessageCallback(messageCallback_);
+        conn->Start();
+        return conn;
     }
 
-    ~Impl() {
-        std::lock_guard<std::mutex> lock(mutex_);
-        std::cout << "Total vlaid linked: " << tcpClients_.size() << std::endl;
-    }
-
-    TcpClientPtr getConnection(const std::vector<EndPoint> &eps, ConnectionManager* connMgr)
+    TcpClientPtr getConnection(const std::vector<EndPoint>& eps, ConnectionManager* mgr)
     {
         if (eps.empty()) {
-            throw RpcException("Not Found Service Instance.");
+            throw RpcException("No service instances available");
         }
-            
-        auto checker = [this, &eps] {
-            for (const auto &ep : eps) {
-                auto it = tcpClients_.find(ep);
-                if (it != tcpClients_.end() && !it->second.empty())
-                {
-                    return true;
-                }
-            }
-            return false;
-        };
 
+        // Wait for pooled connection or connection slot
+        bool usePooled = false;
         {
             std::unique_lock<std::mutex> lock(mutex_);
-            bool flag = false;
-            if (!condition_.wait_for(lock, std::chrono::seconds(1), 
-                [this, &flag, &eps, &checker] {
-                    flag = checker();
-                    return cnt_.load() < 10 || flag;
-                })) {
-                throw RpcException("Timeout error");
-            }
-
-            
-            if (flag) {
-                for (const auto &ep : eps) {
-                    auto it = tcpClients_.find(ep);
-                    if (it != tcpClients_.end() && !it->second.empty())
-                    {
-                        auto conn = std::move(it->second.front()); 
-                        it->second.pop();
-                        return conn;
+            condition_.wait_for(lock, std::chrono::seconds(1), [this, &eps, &usePooled] {
+                for (const auto& ep : eps) {
+                    auto it = pool_.find(ep);
+                    if (it != pool_.end() && !it->second.empty()) {
+                        usePooled = true;
+                        return true;
                     }
                 }
+                return cnt_.load() < 10;
+            });
+        }
+
+        // Return pooled connection if available
+        if (usePooled) {
+            std::lock_guard<std::mutex> lock(mutex_);
+            for (const auto& ep : eps) {
+                auto it = pool_.find(ep);
+                if (it != pool_.end() && !it->second.empty()) {
+                    auto conn = std::move(it->second.front());
+                    it->second.pop();
+                    if (it->second.empty()) pool_.erase(it);
+                    return conn;
+                }
             }
-            else {
-                cnt_.fetch_add(1, std::memory_order_relaxed);
-            } 
-        }
-        
-
-        // 如果连接本来就存在，那么就直接返回可用连接
-        // {
-        //     std::lock_guard<std::mutex> lock(mutex_);
-
-        //     // 只要有一个存在就直接返回
-        //     for (const auto &ep : eps)
-        //     {
-        //         auto it = tcpClients_.find(ep);
-        //         if (it != tcpClients_.end() && !it->second.empty())
-        //         {
-        //             auto conn = std::move(it->second.front()); 
-        //             it->second.pop();
-        //             return conn;
-        //         }
-        //     }
-        // }
-
-        // cnt_.fetch_add(1, std::memory_order_relaxed);
-
-        // 如果连接不存在，那么创建连接
-        // 采用轮询算法选择某个节点进行服务
-        auto newTcpClient = std::make_shared<TcpClient>(eps[cnt_.load() % eps.size()], connMgr);
-
-        if (!messageCallback_)
-        {
-            throw RpcException("message Callback is nullptr");
         }
 
-        // 设置消息回调
-        newTcpClient->setMessageCallback(messageCallback_);
-        newTcpClient->Start();
+        // Round-robin to create new connection
+        size_t idx = cnt_.fetch_add(1, std::memory_order_relaxed) % eps.size();
+        auto conn = std::make_shared<TcpClient>(eps[idx], mgr);
 
-        return newTcpClient;
+        if (!messageCallback_) {
+            throw RpcException("Message callback not set");
+        }
+
+        conn->setMessageCallback(messageCallback_);
+        conn->Start();
+        return conn;
     }
 
     void setMessageCallback(muduo::net::MessageCallback cb)
     {
-        if (!cb)
-        {
-            LOG_ERROR("setMessageCallback called with empty callback!");
+        if (!cb) {
+            LOG_ERROR("setMessageCallback called with empty callback");
             return;
         }
         messageCallback_ = std::move(cb);
     }
 
-    void recovery(TcpClientPtr ptr) {
-        // std::cout << "tcp Client size: " << tcpClients_.size() << std::endl;
+    void recovery(TcpClientPtr ptr)
+    {
         {
             std::lock_guard<std::mutex> lock(mutex_);
-            tcpClients_[ptr->endPoint()].push(ptr);
+            pool_[ptr->endPoint()].push(std::move(ptr));
         }
         condition_.notify_one();
-
-        // std::cout << "tcp Client size: " << tcpClients_.size() << std::endl;
-        // std::cout << "tcp client totoal: " << cnt_.load() << std::endl;
     }
 };
 
-// ====== ConnectionManager implementation ======
+// --- ConnectionManager facade ---
 
 ConnectionManager::ConnectionManager()
-    : impl_(std::make_unique<Impl>())
-{
-}
+    : impl_(std::make_unique<Impl>()) {}
 
 ConnectionManager::~ConnectionManager() = default;
 
-TcpClientPtr ConnectionManager::getConnection(const EndPoint &ep)
+TcpClientPtr ConnectionManager::getConnection(const EndPoint& ep)
 {
     return impl_->getConnection(ep, this);
 }
 
-TcpClientPtr ConnectionManager::getConnection(const std::vector<EndPoint> &eps)
+TcpClientPtr ConnectionManager::getConnection(const std::vector<EndPoint>& eps)
 {
     return impl_->getConnection(eps, this);
 }
@@ -185,9 +129,9 @@ void ConnectionManager::setMessageCallback(muduo::net::MessageCallback cb)
     impl_->setMessageCallback(std::move(cb));
 }
 
-
-void ConnectionManager::recovery(TcpClientPtr ptr) {
-    impl_->recovery(ptr);
+void ConnectionManager::recovery(TcpClientPtr ptr)
+{
+    impl_->recovery(std::move(ptr));
 }
 
 } // namespace minirpc

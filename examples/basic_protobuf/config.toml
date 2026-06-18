@@ -1,6 +1,6 @@
 # MiniRPC Server Configuration
 [server]
-port = 8082
+port = 8083
 listen_host = "0.0.0.0"
 
 # Service Registry (Nacos)
