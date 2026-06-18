@@ -14,10 +14,10 @@
 class UserService {
 public:
     std::string login(const std::string& name, const std::string& pswd);
-    std::string register(const std::string& name, const std::string& pswd);
+    std::string registerUser(const std::string& name, const std::string& pswd);
 
-    // 将 login 和 register 方法暴露为 RPC 接口
-    RPC_SERVICE_BIND(UserService, login, register);
+    // 将 login 和 registerUser 方法暴露为 RPC 接口
+    RPC_SERVICE_BIND(UserService, login, registerUser);
 };
 ```
 
@@ -25,41 +25,25 @@ public:
 - `GetInstance()` — 获取服务单例
 - `Init()` — 初始化并注册所有方法到 RpcServer
 
-## 注册服务
-
-在对应的 `.cc` 文件中使用 `RPC_SERVICE_REGISTER` 宏：
-
-```cpp
-// UserService.cc
-#include "UserService.h"
-#include "minirpc/core/macro/rpc_service_register.h"
-
-std::string UserService::login(const std::string& name, const std::string& pswd) {
-    // 业务逻辑...
-    return "success";
-}
-
-std::string UserService::register(const std::string& name, const std::string& pswd) {
-    // 业务逻辑...
-    return "success";
-}
-
-// 注册服务到 RpcServer
-RPC_SERVICE_REGISTER(UserService);
-```
-
-`RPC_SERVICE_REGISTER` 利用全局静态变量的构造函数在程序启动时自动调用 `UserService::Init()`。
+支持 1~11 个方法的声明。
 
 ## 启动服务端
 
 ```cpp
 // Server.cc
-#include "minirpc/net/TcpServer.h"
-#include "UserService.cc"  // 确保服务被注册
+#include "minirpc/common/Config.h"
+#include "minirpc/core/RpcServer.h"
+#include "UserService.h"
 
 int main() {
-    minirpc::TcpServer server;
-    server.serve(8081);  // 监听端口 8081
+    // 加载配置文件（缺失时使用默认值）
+    auto config = minirpc::loadConfig("config.toml");
+
+    minirpc::RpcServer& server = minirpc::RpcServer::GetInstance();
+    server.Start(config.port, "RpcServer", config.registry_address.c_str());
+
+    // 保持运行...
+    pthread_pause();
     return 0;
 }
 ```
@@ -73,18 +57,19 @@ int main() {
 ```cpp
 // Client.cc
 #include "UserService.h"
+#include "minirpc/common/Config.h"
 #include <iostream>
 
 int main() {
+    // 加载配置并初始化 RpcClient
+    auto config = minirpc::loadConfig("config.toml");
+    minirpc::RpcClient::GetInstance().init(config.registry_address);
+
     UserService::UserService_Stub stub;
 
     // 调用远程登录方法
     std::string result = stub.login("root", "password");
     std::cout << "Login: " << result << std::endl;
-
-    // 调用远程注册方法
-    std::string result2 = stub.register("newuser", "password123");
-    std::cout << "Register: " << result2 << std::endl;
 
     return 0;
 }
@@ -92,7 +77,34 @@ int main() {
 
 `RPC_SERVICE_STUB` 自动生成的 `UserService_Stub` 类具有以下方法：
 - `login(name, pswd)` — 序列化参数，发送 RPC 请求，等待响应，返回结果
-- `register(name, pswd)` — 同上
+- `registerUser(name, pswd)` — 同上
+
+支持 1~12 个方法的代理类生成。
+
+## 配置文件
+
+在每个可执行文件同级目录下放置 `config.toml`：
+
+```toml
+[server]
+port = 8083
+listen_host = "0.0.0.0"
+
+[registry]
+address = "127.0.0.1:8848"
+group = "DefaultGroup"
+cluster = "DefaultCluster"
+```
+
+配置项说明：
+
+| 配置项 | 默认值 | 说明 |
+|--------|--------|------|
+| `server.port` | 8080 | 服务端监听端口 |
+| `server.listen_host` | 0.0.0.0 | 监听地址 |
+| `registry.address` | 127.0.0.1 | Nacos 服务地址 |
+| `registry.group` | DefaultGroup | Nacos 分组 |
+| `registry.cluster` | DefaultCluster | Nacos 集群名 |
 
 ## 宏详解
 
@@ -103,7 +115,7 @@ int main() {
 **功能**:
 1. 创建服务单例 `GetInstance()`
 2. 生成自动初始化器 `_AutoInit`
-3. 为每个声明的方法生成 `RpcServer::Bind()` 调用
+3. 为每个声明的方法生成 `RpcServer::RegisterService()` 调用
 4. 方法签名通过 `function_traits` 自动提取
 
 **示例**:
@@ -135,35 +147,45 @@ int result = stub.add(1, 2);           // 返回 3
 double result2 = stub.divide(10.0, 3); // 返回 3.333...
 ```
 
-### RPC_SERVICE_REGISTER
+## 序列化类型
 
-**位置**: 对应的 `.cc` 文件
+mini-rpc 支持两种序列化方式，根据参数类型自动选择：
 
-**功能**:
-1. 在命名空间作用域创建全局静态初始化器
-2. 利用 C++ 静态初始化顺序保证 `Init()` 在 `main()` 之前执行
-3. 触发 `RpcServer::RegisterService()` 和所有 `Bind()` 调用
+### JSON 序列化
 
-## 自定义参数类型
-
-mini-rpc 支持任意可通过 nlohmann/json 序列化的 C++ 类型：
+适用于基本类型和标准容器：
 
 ```cpp
-struct UserRequest {
-    std::string name;
-    std::string email;
-    int age;
-};
-
-struct UserResponse {
-    int id;
-    std::string message;
-};
-
-class UserServer {
+class MyService {
 public:
-    UserResponse createUser(const UserRequest& req);
-    RPC_SERVICE_BIND(UserServer, createUser);
+    std::string greet(const std::string& name);
+    int add(int a, int b);
+    std::vector<int> getIds();
+    RPC_SERVICE_BIND(MyService, greet, add, getIds);
+};
+```
+
+### Protobuf 序列化
+
+适用于继承自 `google::protobuf::Message` 的类型：
+
+```cpp
+// 定义 protobuf 消息
+message UserRequest {
+    string name = 1;
+    string email = 2;
+    int32 age = 3;
+}
+
+message UserResponse {
+    int32 id = 1;
+    string message = 2;
+}
+
+class UserService {
+public:
+    UserResponse createUser(UserRequest req);
+    RPC_SERVICE_BIND(UserService, createUser);
 };
 ```
 
@@ -178,3 +200,9 @@ try {
     std::cerr << "RPC Error: " << e.what() << std::endl;
 }
 ```
+
+常见异常原因：
+1. **服务端未启动** — 确认 RpcServer 正在运行
+2. **服务名不匹配** — 检查服务名是否正确
+3. **Nacos 服务不可用** — 确认 Nacos 地址和配置正确
+4. **超时** — 默认 200ms 超时，网络延迟高时可能超时

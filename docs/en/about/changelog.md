@@ -1,5 +1,38 @@
 # Changelog
 
+## v2.1.0 (2026-06-18)
+
+### Major Refactoring
+
+- **Adopted muduo network library** — Replaced custom network layer with muduo as the communication framework
+- **ConnectionManager** — New connection manager for managing and reusing TCP connections
+- **ServiceInstanceCache** — Uses Nacos subscribe pattern, replacing synchronous getAllInstances on every request
+- **muduo-based TcpClient** — Rewrote TcpClient and TcpServer based on muduo
+- **ConnectionManager** — Multi-endpoint connection management with random healthy connection selection
+
+### New Features
+
+- **Config file support** — New TOML config loader (Config.h/cc), supports server port, listen address, Nacos address, etc.
+- **Protobuf serialization integration** — Serialize auto-detects Protobuf Message types and uses Protobuf serialization
+- **TimeStamp component** — New microsecond-precision timestamp component
+- **Random component** — Thread-safe random number generator based on mt19937
+- **Response struct** — New unified RPC response structure
+- **PendingRequest** — New pending request structure, associating connection and promise
+- **EndPoint struct** — Network endpoint struct with hash specialization for unordered_map
+
+### Macro Extensions
+
+- **RPC_SERVICE_BIND** — Extended to support 1-11 methods (was 1-5)
+- **RPC_SERVICE_STUB** — Extended to support 1-12 methods (was 1-5), added independent argument counter
+
+### Bug Fixes
+
+- **Fixed TcpClient destructor crash** — Dual latch barrier ensures muduo async cleanup completes before EventLoop exits
+- **Fixed Nacos EventListener lifecycle** — NoDelete empty deleter, Nacos SDK manages listener lifecycle
+- **Fixed ServiceInstanceCache destructor SEGV** — Added is_destroyed_ atomic flag and shutdown() method
+
+---
+
 ## v2.0 (2026-06-02)
 
 ### Security Audit & Fixes

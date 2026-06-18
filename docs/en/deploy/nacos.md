@@ -2,21 +2,28 @@
 
 mini-rpc deeply integrates with [Nacos](https://nacos.io/) as a service registry for automatic service registration and discovery.
 
-## Environment Configuration
+## Configuration
 
-Configure Nacos connection parameters via environment variables:
+### Config File
 
-| Environment Variable | Default | Description |
-|---------------------|---------|-------------|
-| `NACOS_SERVER_ADDR` | `127.0.0.1:8848` | Nacos server address |
-| `NACOS_SERVER_HOST` | `127.0.0.1` | Nacos server host |
-| `NACOS_SERVER_PORT` | `8848` | Nacos server port |
+Configure Nacos connection parameters via `config.toml`:
 
-```bash
-# Example: Configure Nacos address
-export NACOS_SERVER_ADDR=192.168.1.100:8848
-export NACOS_SERVER_HOST=192.168.1.100
-export NACOS_SERVER_PORT=8848
+```toml
+[registry]
+address = "127.0.0.1"
+group = "DefaultGroup"
+cluster = "DefaultCluster"
+```
+
+### Code Configuration
+
+```cpp
+// Server
+minirpc::RpcServer& server = minirpc::RpcServer::GetInstance();
+server.Start(8083, "RpcServer", "127.0.0.1");
+
+// Client
+minirpc::RpcClient::GetInstance().init("127.0.0.1");
 ```
 
 ## Service Registration
@@ -24,12 +31,14 @@ export NACOS_SERVER_PORT=8848
 When the server starts, it automatically registers all bound RPC services with Nacos:
 
 ```
-TcpServer::serve(port)
-  └── Background thread
-       └── Iterate all registered service names
+RpcServer::Start(port, name, nacosAddr)
+  └── Background thread (ServiceRegisterWorker)
+       └── Iterate all instances to register
             └── Register as ephemeral instances with Nacos
                  └── IP: Server address
                  └── Port: Listening port
+                 └── Group: Configured group
+                 └── Cluster: Configured cluster name
 ```
 
 Registered services are visible in the Nacos console:
@@ -37,56 +46,42 @@ Registered services are visible in the Nacos console:
 ```
 Services > UserService
 ├── Cluster: DEFAULT
-├── Instance: 127.0.0.1:8081 (Healthy)
+├── Instance: 127.0.0.1:8083 (Healthy)
 └── Healthy Instances: 1
 ```
 
-## Service Discovery
+## Service Discovery — Subscription Mode
 
-When the client makes an RPC call, it automatically retrieves the service instance address from Nacos:
+The client uses **Nacos subscription mode** via `ServiceInstanceCache`:
 
 ```
-RpcConnectionPool::connect()
-  └── getServiceAddress(serviceName)
-       └── Call Nacos HTTP API
-            └── GET /nacos/v1/ns/instance/list?serviceName=X
-            └── Extract first healthy instance's ip:port
-            └── Establish TCP connection
+RpcClient::AsyncInvoke()
+  └── ServiceInstanceCache::subscribeService(serviceName)
+       └── First subscription: Register EventListener with Nacos
+       └── Subsequent calls: Read directly from cache (no network IO)
+  └── ServiceInstanceCache::getInstances(serviceName)
+       └── Read instance list from cache
+       └── ConnectionManager randomly selects healthy connection
+       └── Establish TCP connection
 ```
 
-The Nacos SDK uses libcurl to make HTTP requests, returns a JSON-formatted service list, and the client picks the first healthy instance to establish a connection.
+### Subscription Mode Advantages
 
-## Direct Nacos SDK Operations
+- **Zero blocking**: Instance changes are pushed to cache by Nacos SDK background thread
+- **Low latency**: No network IO during RPC calls
+- **Real-time**: Nacos pushes change notifications, cache updates immediately
 
-For direct Nacos operations (manual registration/deregistration), use nacos-sdk-cpp:
-
-```bash
-# Auto-downloaded via FetchContent (configured in CMakeLists.txt)
-FetchContent_Declare(
-    nacos_cpp
-    GIT_REPOSITORY https://github.com/nacos-group/nacos-sdk-cpp.git
-    GIT_TAG        v1.1.1
-)
-```
+### ServiceChangeListener
 
 ```cpp
-#include "Nacos.h"
-
-// Create factory and naming service
-Properties configProps;
-configProps[PropertyKeyConst::SERVER_ADDR] = "127.0.0.1";
-INacosServiceFactory* factory = NacosFactoryFactory::getNacosFactory(configProps);
-NamingService* namingSvc = factory->CreateNamingService();
-
-// Register instance
-Instance instance;
-instance.ip = "127.0.0.1";
-instance.port = 8081;
-instance.ephemeral = true;
-namingSvc->registerInstance("MyService", instance);
-
-// Deregister instance
-namingSvc->deregisterInstance("MyService", instance);
+class ServiceChangeListener : public nacos::EventListener {
+    void receiveNamingInfo(const nacos::ServiceInfo& serviceInfo) override {
+        // Nacos background thread callback, updates cache
+        std::string name = std::string(info.getName());
+        std::list<nacos::Instance> hosts = info.getHosts();
+        instanceCache_[name] = std::move(hosts);
+    }
+};
 ```
 
 ## Multi-Service Deployment
@@ -96,15 +91,15 @@ Multiple servers can register the same service name with Nacos for load balancin
 ```
 Nacos
 ├── UserService
-│   ├── 192.168.1.10:8081 (Healthy)
-│   ├── 192.168.1.11:8081 (Healthy)
-│   └── 192.168.1.12:8081 (Healthy)
+│   ├── 192.168.1.10:8083 (Healthy)
+│   ├── 192.168.1.11:8083 (Healthy)
+│   └── 192.168.1.12:8083 (Healthy)
 └── OrderService
-    ├── 192.168.1.10:8082 (Healthy)
-    └── 192.168.1.11:8082 (Healthy)
+    ├── 192.168.1.10:8083 (Healthy)
+    └── 192.168.1.11:8083 (Healthy)
 ```
 
-Clients retrieve the first healthy instance via `getServiceAddress()`. Load balancing strategies can be extended as needed.
+Clients get all healthy instances via `ServiceInstanceCache`, and `ConnectionManager` randomly selects a connection.
 
 ## Docker Deployment for Nacos
 
@@ -133,5 +128,5 @@ docker-compose up -d
 |------------|---------|---------|
 | nacos-sdk-cpp | v1.1.1 | Nacos C++ SDK |
 | nacos-cli-static | - | Nacos CLI static library |
-| curl | - | HTTP requests (service discovery) |
+| curl | - | HTTP requests (used internally by SDK) |
 | z | - | Compression library |

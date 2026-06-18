@@ -4,17 +4,21 @@
 
 ### What is mini-rpc?
 
-mini-rpc is a lightweight C++ RPC framework providing a simple and intuitive API for remote procedure calls. It uses epoll ET mode for high-performance network I/O and supports service registration/discovery (Nacos), making it suitable for distributed system development.
+mini-rpc is a lightweight C++ RPC framework providing a simple and intuitive API for remote procedure calls. It uses muduo network library and Nacos service registry, making it suitable for distributed system development.
 
 ### What serialization formats are supported?
 
-Currently **JSON** (via nlohmann/json). Protobuf serialization interface is defined but not implemented, leaving room for extension.
+The framework **automatically selects** serialization based on parameter type:
+
+- **JSON** (nlohmann/json) — For basic types, `std::string`, `std::tuple`, `std::vector`, etc.
+- **Protobuf** — For types derived from `google::protobuf::Message`
 
 ### What dependencies are required?
 
 - **Build**: CMake >= 3.20, GCC 9+ / Clang 10+, C++17
 - **Runtime**: libcurl, zlib
 - **Service Registry**: Nacos >= 2.0
+- **Auto-downloaded**: muduo, nacos-sdk-cpp, nlohmann/json, protobuf via CMake FetchContent
 
 ## Usage Questions
 
@@ -28,17 +32,20 @@ public:
     RPC_SERVICE_BIND(MyService, add);
 };
 
-// 2. Register in the .cc file
-RPC_SERVICE_REGISTER(MyService);
+// 2. Implement in the .cc file
+int MyService::add(int a, int b) {
+    return a + b;
+}
 ```
 
 ### Why does the client throw RpcException?
 
 Common causes:
-1. **Server not running** — Ensure TcpServer is up and listening
-2. **Service name mismatch** — Verify service name format `ClassName.methodName`
-3. **Parameter type mismatch** — Checked at compile-time via `static_assert`, runtime via CRC32 validation
-4. **Nacos unavailable** — Confirm Nacos address and environment variables are correct
+1. **Server not running** — Ensure RpcServer is up and listening
+2. **RpcClient not initialized** — Call `RpcClient::GetInstance().init(nacosAddr)` before invocation
+3. **Service name mismatch** — Verify service name format is correct
+4. **Parameter type mismatch** — Checked at compile-time via `static_assert`
+5. **Nacos unavailable** — Confirm Nacos address and config are correct
 
 ### How do I debug RPC calls?
 
@@ -54,20 +61,23 @@ Check log output for connection establishment, message sending and receiving det
 
 ### How does the connection pool work?
 
-Each service name corresponds to a `RpcConnectionPool`. Connections are created lazily on first borrow. Each pool has its own epoll event loop thread, automatically managing connection lifecycle (health checks, reconnect on disconnect).
+`ConnectionManager` maintains connection pools to multiple server endpoints. Each `EndPoint` has a corresponding `TcpClient` (based on muduo). Connections are created lazily on first access, then reused.
 
 ### Can I customize the timeout?
 
-The current `call()` method uses a fixed 5-second timeout. To adjust, modify the `wait_for()` parameter in `RpcClient::call()`.
+The current `Invoke()` method uses a fixed 200ms timeout. To adjust, modify the `get_with_timeout()` parameter in `RpcClient::Invoke()`.
 
-### Is Protobuf supported?
+### How does service discovery work?
 
-The interface is defined but not yet implemented. JSON serialization is used by default. Protobuf support requires implementing the serialization/deserialization logic yourself.
+Uses **Nacos subscription pattern**:
+1. On first call to a service, `ServiceInstanceCache` subscribes to Nacos and registers an EventListener
+2. When Nacos instances change, the SDK background thread callbacks update the cache
+3. Subsequent RPC calls read the instance list directly from cache (no network IO)
 
 ### How do I deploy to production?
 
 1. Build release version: `cmake -DCMAKE_BUILD_TYPE=Release ..`
-2. Ensure Nacos is available and configure correct environment variables
+2. Ensure Nacos is available, configure correct `config.toml`
 3. Manage service processes with systemd or Docker
 4. Monitor Nacos console for service health status
 

@@ -2,21 +2,28 @@
 
 mini-rpc 深度集成 [Nacos](https://nacos.io/) 作为服务注册中心，实现服务的自动注册与发现。
 
-## 环境配置
+## 配置方式
 
-通过环境变量配置 Nacos 连接参数：
+### 配置文件
 
-| 环境变量 | 默认值 | 说明 |
-|---------|--------|------|
-| `NACOS_SERVER_ADDR` | `127.0.0.1:8848` | Nacos 服务器地址 |
-| `NACOS_SERVER_HOST` | `127.0.0.1` | Nacos 服务器主机 |
-| `NACOS_SERVER_PORT` | `8848` | Nacos 服务器端口 |
+通过 `config.toml` 配置 Nacos 连接参数：
 
-```bash
-# 示例：配置 Nacos 地址
-export NACOS_SERVER_ADDR=192.168.1.100:8848
-export NACOS_SERVER_HOST=192.168.1.100
-export NACOS_SERVER_PORT=8848
+```toml
+[registry]
+address = "127.0.0.1"
+group = "DefaultGroup"
+cluster = "DefaultCluster"
+```
+
+### 代码配置
+
+```cpp
+// 服务端
+minirpc::RpcServer& server = minirpc::RpcServer::GetInstance();
+server.Start(8083, "RpcServer", "127.0.0.1");
+
+// 客户端
+minirpc::RpcClient::GetInstance().init("127.0.0.1");
 ```
 
 ## 服务注册
@@ -24,12 +31,14 @@ export NACOS_SERVER_PORT=8848
 服务端启动时，会自动向 Nacos 注册所有已绑定的 RPC 服务：
 
 ```
-TcpServer::serve(port)
-  └── 后台线程
-       └── 遍历所有已注册的 service name
+RpcServer::Start(port, name, nacosAddr)
+  └── 后台线程 (ServiceRegisterWorker)
+       └── 遍历所有待注册的实例
             └── 向 Nacos 注册为临时实例
                  └── IP: 服务器地址
                  └── Port: 监听端口
+                 └── Group: 配置的分组
+                 └── Cluster: 配置的集群名
 ```
 
 注册的服务在 Nacos 控制台可见：
@@ -37,56 +46,42 @@ TcpServer::serve(port)
 ```
 服务列表 > UserService
 ├── 集群: DEFAULT
-├── 实例: 127.0.0.1:8081 (健康)
+├── 实例: 127.0.0.1:8083 (健康)
 └── 健康实例数: 1
 ```
 
-## 服务发现
+## 服务发现 — 订阅模式
 
-客户端调用 RPC 时，自动从 Nacos 获取服务实例地址：
+客户端使用 **Nacos 订阅模式**，通过 `ServiceInstanceCache` 获取服务实例列表：
 
 ```
-RpcConnectionPool::connect()
-  └── getServiceAddress(serviceName)
-       └── 调用 Nacos HTTP API
-            └── GET /nacos/v1/ns/instance/list?serviceName=X
-            └── 解析第一个健康实例的 ip:port
-            └── 建立 TCP 连接
+RpcClient::AsyncInvoke()
+  └── ServiceInstanceCache::subscribeService(serviceName)
+       └── 首次订阅：向 Nacos 注册 EventListener
+       └── 后续调用：直接从缓存读取实例列表（无网络 IO）
+  └── ServiceInstanceCache::getInstances(serviceName)
+       └── 从缓存读取实例列表
+       └── ConnectionManager 随机选择健康连接
+       └── 建立 TCP 连接
 ```
 
-Nacos SDK 通过 libcurl 发起 HTTP 请求，返回 JSON 格式的服务列表，客户端取第一个健康实例建立连接。
+### 订阅模式优势
 
-## 使用 Nacos SDK 直接操作
+- **零阻塞**: 实例变更由 Nacos SDK 后台线程回调更新缓存
+- **低延迟**: RPC 调用时无需等待网络 IO
+- **实时性**: Nacos 推送变更通知，缓存即时更新
 
-如需直接操作 Nacos（手动注册/注销），可使用 nacos-sdk-cpp：
-
-```bash
-# FetchContent 自动下载（CMakeLists.txt 中已配置）
-FetchContent_Declare(
-    nacos_cpp
-    GIT_REPOSITORY https://github.com/nacos-group/nacos-sdk-cpp.git
-    GIT_TAG        v1.1.1
-)
-```
+### ServiceChangeListener
 
 ```cpp
-#include "Nacos.h"
-
-// 创建工厂和命名服务
-Properties configProps;
-configProps[PropertyKeyConst::SERVER_ADDR] = "127.0.0.1";
-INacosServiceFactory* factory = NacosFactoryFactory::getNacosFactory(configProps);
-NamingService* namingSvc = factory->CreateNamingService();
-
-// 注册实例
-Instance instance;
-instance.ip = "127.0.0.1";
-instance.port = 8081;
-instance.ephemeral = true;
-namingSvc->registerInstance("MyService", instance);
-
-// 注销实例
-namingSvc->deregisterInstance("MyService", instance);
+class ServiceChangeListener : public nacos::EventListener {
+    void receiveNamingInfo(const nacos::ServiceInfo& serviceInfo) override {
+        // Nacos 后台线程回调，更新缓存
+        std::string name = std::string(info.getName());
+        std::list<nacos::Instance> hosts = info.getHosts();
+        instanceCache_[name] = std::move(hosts);
+    }
+};
 ```
 
 ## 多服务部署
@@ -96,15 +91,15 @@ namingSvc->deregisterInstance("MyService", instance);
 ```
 Nacos
 ├── UserService
-│   ├── 192.168.1.10:8081 (健康)
-│   ├── 192.168.1.11:8081 (健康)
-│   └── 192.168.1.12:8081 (健康)
+│   ├── 192.168.1.10:8083 (健康)
+│   ├── 192.168.1.11:8083 (健康)
+│   └── 192.168.1.12:8083 (健康)
 └── OrderService
-    ├── 192.168.1.10:8082 (健康)
-    └── 192.168.1.11:8082 (健康)
+    ├── 192.168.1.10:8083 (健康)
+    └── 192.168.1.11:8083 (健康)
 ```
 
-客户端通过 `getServiceAddress()` 获取第一个健康实例，可根据实际需求扩展负载均衡策略。
+客户端通过 `ServiceInstanceCache` 获取所有健康实例，`ConnectionManager` 随机选择连接。
 
 ## Docker 部署 Nacos
 
@@ -133,5 +128,5 @@ docker-compose up -d
 |------|------|------|
 | nacos-sdk-cpp | v1.1.1 | Nacos C++ SDK |
 | nacos-cli-static | - | Nacos CLI 静态库 |
-| curl | - | HTTP 请求（服务发现） |
+| curl | - | HTTP 请求（SDK 内部使用）|
 | z | - | 压缩库 |

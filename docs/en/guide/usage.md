@@ -14,10 +14,10 @@ Use the `RPC_SERVICE_BIND` macro to declare methods to expose as RPC endpoints:
 class UserService {
 public:
     std::string login(const std::string& name, const std::string& pswd);
-    std::string register(const std::string& name, const std::string& pswd);
+    std::string registerUser(const std::string& name, const std::string& pswd);
 
-    // Expose login and register methods as RPC endpoints
-    RPC_SERVICE_BIND(UserService, login, register);
+    // Expose login and registerUser methods as RPC endpoints
+    RPC_SERVICE_BIND(UserService, login, registerUser);
 };
 ```
 
@@ -25,41 +25,25 @@ The `RPC_SERVICE_BIND` macro auto-generates:
 - `GetInstance()` — Get the service singleton
 - `Init()` — Initialize and register all methods to RpcServer
 
-## Registering a Service
-
-Use `RPC_SERVICE_REGISTER` in the corresponding `.cc` file:
-
-```cpp
-// UserService.cc
-#include "UserService.h"
-#include "minirpc/core/macro/rpc_service_register.h"
-
-std::string UserService::login(const std::string& name, const std::string& pswd) {
-    // Business logic...
-    return "success";
-}
-
-std::string UserService::register(const std::string& name, const std::string& pswd) {
-    // Business logic...
-    return "success";
-}
-
-// Register service with RpcServer
-RPC_SERVICE_REGISTER(UserService);
-```
-
-`RPC_SERVICE_REGISTER` uses a global static variable constructor to auto-call `UserService::Init()` at program startup.
+Supports 1-11 method declarations.
 
 ## Starting the Server
 
 ```cpp
 // Server.cc
-#include "minirpc/net/TcpServer.h"
-#include "UserService.cc"  // Ensure service is registered
+#include "minirpc/common/Config.h"
+#include "minirpc/core/RpcServer.h"
+#include "UserService.h"
 
 int main() {
-    minirpc::TcpServer server;
-    server.serve(8081);  // Listen on port 8081
+    // Load config file (uses defaults if missing)
+    auto config = minirpc::loadConfig("config.toml");
+
+    minirpc::RpcServer& server = minirpc::RpcServer::GetInstance();
+    server.Start(config.port, "RpcServer", config.registry_address.c_str());
+
+    // Keep running...
+    pthread_pause();
     return 0;
 }
 ```
@@ -73,18 +57,19 @@ The `RPC_SERVICE_STUB` macro auto-generates a client proxy class:
 ```cpp
 // Client.cc
 #include "UserService.h"
+#include "minirpc/common/Config.h"
 #include <iostream>
 
 int main() {
+    // Load config and initialize RpcClient
+    auto config = minirpc::loadConfig("config.toml");
+    minirpc::RpcClient::GetInstance().init(config.registry_address);
+
     UserService::UserService_Stub stub;
 
     // Call remote login method
     std::string result = stub.login("root", "password");
     std::cout << "Login: " << result << std::endl;
-
-    // Call remote register method
-    std::string result2 = stub.register("newuser", "password123");
-    std::cout << "Register: " << result2 << std::endl;
 
     return 0;
 }
@@ -92,7 +77,31 @@ int main() {
 
 The auto-generated `UserService_Stub` class provides:
 - `login(name, pswd)` — Serialize params, send RPC request, wait for response, return result
-- `register(name, pswd)` — Same as above
+
+Supports 1-12 method proxy generation.
+
+## Configuration
+
+Place `config.toml` alongside each executable:
+
+```toml
+[server]
+port = 8083
+listen_host = "0.0.0.0"
+
+[registry]
+address = "127.0.0.1:8848"
+group = "DefaultGroup"
+cluster = "DefaultCluster"
+```
+
+| Config | Default | Description |
+|--------|---------|-------------|
+| `server.port` | 8080 | Server listening port |
+| `server.listen_host` | 0.0.0.0 | Listening address |
+| `registry.address` | 127.0.0.1 | Nacos registry address |
+| `registry.group` | DefaultGroup | Nacos group |
+| `registry.cluster` | DefaultCluster | Nacos cluster name |
 
 ## Macro Reference
 
@@ -103,7 +112,7 @@ The auto-generated `UserService_Stub` class provides:
 **Functionality**:
 1. Creates service singleton `GetInstance()`
 2. Generates auto-initializer `_AutoInit`
-3. Generates `RpcServer::Bind()` call for each declared method
+3. Generates `RpcServer::RegisterService()` call for each declared method
 4. Method signatures auto-extracted via `function_traits`
 
 **Example**:
@@ -135,35 +144,37 @@ int result = stub.add(1, 2);           // Returns 3
 double result2 = stub.divide(10.0, 3); // Returns 3.333...
 ```
 
-### RPC_SERVICE_REGISTER
+## Serialization
 
-**Location**: Corresponding `.cc` file
+mini-rpc automatically selects serialization based on parameter type:
 
-**Functionality**:
-1. Creates global static initializer in namespace scope
-2. Leverages C++ static initialization order to ensure `Init()` runs before `main()`
-3. Triggers `RpcServer::RegisterService()` and all `Bind()` calls
+### JSON Serialization
 
-## Custom Parameter Types
-
-mini-rpc supports any C++ type that can be serialized by nlohmann/json:
+For basic types and standard containers:
 
 ```cpp
-struct UserRequest {
-    std::string name;
-    std::string email;
-    int age;
-};
-
-struct UserResponse {
-    int id;
-    std::string message;
-};
-
-class UserServer {
+class MyService {
 public:
-    UserResponse createUser(const UserRequest& req);
-    RPC_SERVICE_BIND(UserServer, createUser);
+    std::string greet(const std::string& name);
+    int add(int a, int b);
+    RPC_SERVICE_BIND(MyService, greet, add);
+};
+```
+
+### Protobuf Serialization
+
+For types derived from `google::protobuf::Message`:
+
+```cpp
+message UserRequest {
+    string name = 1;
+    int32 age = 2;
+}
+
+class UserService {
+public:
+    UserResponse createUser(UserRequest req);
+    RPC_SERVICE_BIND(UserService, createUser);
 };
 ```
 

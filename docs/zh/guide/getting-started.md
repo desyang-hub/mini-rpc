@@ -26,7 +26,14 @@ cmake ..
 make -j$(nproc)
 ```
 
-构建完成后，将在 `bin/` 目录下生成可执行文件，`lib/` 目录下生成静态库文件。
+构建时 CMake 会通过 FetchContent 自动下载以下依赖：
+- **muduo** — 高性能网络库
+- **nacos-sdk-cpp** — Nacos C++ SDK
+- **nlohmann/json** — JSON 序列化库
+- **protobuf** — Protobuf 序列化支持
+- **toml11** / **toml++** — TOML 配置文件解析
+
+构建完成后，将在 `build/examples/` 目录下生成各示例的可执行文件。
 
 ## 运行示例
 
@@ -36,17 +43,14 @@ make -j$(nproc)
 
 ```bash
 # 默认地址：127.0.0.1:8848
-# 可通过环境变量修改：
-export NACOS_SERVER_ADDR=127.0.0.1:8848
-export NACOS_SERVER_HOST=127.0.0.1
-export NACOS_SERVER_PORT=8848
+# 可通过配置文件 config.toml 修改
 ```
 
 ### 2. 启动服务端
 
 ```bash
-# 在 mini-rpc/build-test/bin 目录下
-./example_server &
+# 在示例目录下，确保 config.toml 存在
+./server_p &
 ```
 
 服务端启动后会自动向 Nacos 注册服务。
@@ -55,7 +59,7 @@ export NACOS_SERVER_PORT=8848
 
 ```bash
 # 新开一个终端
-./example_client
+./client_p
 ```
 
 输出：
@@ -65,36 +69,37 @@ Login: success
 Register: success
 ```
 
-### 4. 使用 minirpc_main
+## 配置文件
 
-```bash
-./minirpc_main
+每个可执行文件同级目录下放置 `config.toml`，框架会自动读取：
+
+```toml
+[server]
+port = 8083
+listen_host = "0.0.0.0"
+
+[registry]
+address = "127.0.0.1:8848"
+group = "DefaultGroup"
+cluster = "DefaultCluster"
 ```
 
-输出：
-
-```
-sum: 3
-sub: -1
-```
+配置文件缺失时不报错，使用默认值。
 
 ## 项目结构
 
 ```
 mini-rpc/
 ├── include/minirpc/          # 公共头文件
-│   ├── common/               # 通用组件（线程池、日志、缓冲区）
-│   ├── core/                 # RPC 核心（客户端、服务端、连接池）
+│   ├── common/               # 通用组件（线程池、日志、缓冲区、配置）
+│   ├── core/                 # RPC 核心（客户端、服务端、连接管理）
 │   │   └── macro/            # 服务绑定宏
-│   ├── net/                  # 网络层（TCP 服务器、事件循环、Epoll）
+│   ├── net/                  # 网络层（基于 muduo 封装）
 │   └── protocol/             # 协议层（序列化、编解码）
 ├── src/minirpc/              # 实现文件
-├── example/                  # 示例代码
-│   ├── Server.cc
-│   ├── Client.cc
-│   ├── UserService.h
-│   └── UserService.cc
+├── examples/                 # 示例代码
 ├── tests/                    # 单元测试
+├── docs/                     # 文档
 ├── CMakeLists.txt
 └── README.md
 ```

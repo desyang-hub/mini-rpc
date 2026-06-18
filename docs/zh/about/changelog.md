@@ -1,5 +1,38 @@
 # 更新日志
 
+## v2.1.0 (2026-06-18)
+
+### 重大重构
+
+- **使用 muduo 网络库** — 替换自定义网络层，全面采用 muduo 作为通信框架
+- **ConnectionManager** — 新增连接管理器，管理和复用 TCP 连接
+- **ServiceInstanceCache** — 使用 Nacos subscribe 订阅模式，替代每次请求时同步查询 getAllInstances
+- **基于 muduo TcpClient 的 TcpClient 封装** — 重写 TcpClient 和 TcpServer，基于 muduo 封装
+- **ConnectionManager** — 支持多端点连接管理，随机选择健康连接
+
+### 新增功能
+
+- **配置文件支持** — 新增 `config.toml` 配置文件加载器 (Config.h/cc)，支持服务端口、监听地址、Nacos 地址等配置
+- **Protobuf 序列化集成** — Serialize 自动检测 Protobuf Message 类型并使用 Protobuf 序列化
+- **TimeStamp 组件** — 新增微秒级时间戳组件
+- **Random 组件** — 线程安全的随机数生成器，基于 mt19937
+- **Response 结构体** — 新增统一的 RPC 响应结构体
+- **PendingRequest** — 新增挂起请求结构体，关联连接和 promise
+- **EndPoint 结构体** — 网络端点结构体，支持 hash 特化用于 unordered_map
+
+### 宏扩展
+
+- **RPC_SERVICE_BIND** — 扩展支持 1~11 个方法（原支持 1~5）
+- **RPC_SERVICE_STUB** — 扩展支持 1~12 个方法（原支持 1~5），添加独立的参数计数器
+
+### Bug 修复
+
+- **修复 TcpClient 析构异常** — 使用双层 latch 屏障确保 muduo 异步清理完成后再退出 EventLoop
+- **修复 Nacos EventListener 生命周期** — 使用 NoDelete 空 deleter，由 Nacos SDK 管理 listener 生命周期
+- **修复 ServiceInstanceCache 析构 SEGV** — 添加 is_destroyed_ 原子标志和 shutdown() 方法
+
+---
+
 ## v2.0 (2026-06-02)
 
 ### 安全审计与修复

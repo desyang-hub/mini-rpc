@@ -24,7 +24,7 @@ features:
   - icon:
       src: /logo.svg
     title: Asynchronous Communication
-    details: High-performance network I/O powered by epoll ET mode, event-driven non-blocking communication model
+    details: High-performance network I/O powered by muduo network library, event-driven non-blocking communication model
   - icon:
       src: /logo.svg
     title: Flexible Serialization

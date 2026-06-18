@@ -26,27 +26,43 @@ cmake ..
 make -j$(nproc)
 ```
 
-After building, executables will be in `bin/` and static libraries in `lib/`.
+CMake automatically downloads the following dependencies via FetchContent:
+- **muduo** — High-performance network library
+- **nacos-sdk-cpp** — Nacos C++ SDK
+- **nlohmann/json** — JSON serialization
+- **protobuf** — Protobuf serialization support
+- **toml++** — TOML config file parsing
+
+After building, executables will be in `build/examples/`.
+
+## Configuration
+
+Place a `config.toml` next to each executable:
+
+```toml
+[server]
+port = 8083
+listen_host = "0.0.0.0"
+
+[registry]
+address = "127.0.0.1:8848"
+group = "DefaultGroup"
+cluster = "DefaultCluster"
+```
+
+Default values are used when the config file is missing.
 
 ## Run Examples
 
 ### 1. Start Nacos Service
 
-Ensure Nacos is running:
-
-```bash
-# Default: 127.0.0.1:8848
-# Override via environment variables:
-export NACOS_SERVER_ADDR=127.0.0.1:8848
-export NACOS_SERVER_HOST=127.0.0.1
-export NACOS_SERVER_PORT=8848
-```
+Ensure Nacos is running at `127.0.0.1:8848` (default).
 
 ### 2. Start the Server
 
 ```bash
-# In mini-rpc/build-test/bin
-./example_server &
+cd build/examples/simple_plus
+./server_p &
 ```
 
 The server automatically registers services with Nacos on startup.
@@ -55,7 +71,7 @@ The server automatically registers services with Nacos on startup.
 
 ```bash
 # In a new terminal
-./example_client
+./client_p
 ```
 
 Output:
@@ -65,36 +81,20 @@ Login: success
 Register: success
 ```
 
-### 4. Run minirpc_main
-
-```bash
-./minirpc_main
-```
-
-Output:
-
-```
-sum: 3
-sub: -1
-```
-
 ## Project Structure
 
 ```
 mini-rpc/
 ├── include/minirpc/          # Public headers
-│   ├── common/               # Utilities (ThreadPool, Logger, Buffer)
-│   ├── core/                 # RPC core (Client, Server, Connection Pool)
+│   ├── common/               # Utilities (ThreadPool, Logger, Config)
+│   ├── core/                 # RPC core (Client, Server, Connection Manager)
 │   │   └── macro/            # Service binding macros
-│   ├── net/                  # Network layer (TCP Server, EventLoop, Epoll)
+│   ├── net/                  # Network layer (muduo-based)
 │   └── protocol/             # Protocol layer (Serialization, Encoding)
 ├── src/minirpc/              # Implementation files
-├── example/                  # Example code
-│   ├── Server.cc
-│   ├── Client.cc
-│   ├── UserService.h
-│   └── UserService.cc
+├── examples/                 # Example code
 ├── tests/                    # Unit tests
+├── docs/                     # Documentation
 ├── CMakeLists.txt
 └── README.md
 ```

@@ -1,6 +1,6 @@
 # Architecture Overview
 
-mini-rpc adopts a layered architecture design with four core layers, each with clear responsibilities and well-defined boundaries.
+mini-rpc adopts a layered architecture design with four core layers, each with clear responsibilities and well-defined boundaries. The network layer is based on the [muduo](https://github.com/chenshuo/muduo) network library.
 
 ## Architecture Diagram
 
@@ -17,51 +17,43 @@ graph TB
     subgraph Core["RPC Core Layer"]
         RS[RpcServer]
         RC[RpcClient]
-        CP[Connection Pool IConnectionPool]
-        CPF[TcpConnectionPoolFactory]
-        RC --> CP
-        CPF --> CP
-        RS --> CP
+        CM[ConnectionManager]
+        SIC[ServiceInstanceCache]
+        RC --> CM
+        RC --> SIC
     end
 
-    subgraph Net["Network Layer"]
+    subgraph Net["Network Layer (muduo)"]
         TS[TcpServer]
-        TC[TcpConnection]
-        EL[EventLoop]
-        EP[EpollPoller]
-        CH[Channel]
-        TS --> TC
+        TC[TcpClient]
+        EL[EventLoopThread]
         TS --> EL
-        EL --> EP
-        EP --> CH
     end
 
     subgraph Protocol["Protocol Layer"]
         P[ProtocolHeader]
         E[Encoder]
         D[Decoder]
-        S[Serialize]
+        S2[Serialize]
         P --> E
         P --> D
-        E --> S
-        D --> S
+        E --> S2
+        D --> S2
     end
 
     subgraph Common["Common Layer"]
         TP[ThreadPool]
         LG[Logger]
-        BR[RingBuffer]
+        CF[Config]
         CR[CRC32]
     end
 
     M1 --> RS
     M2 --> RC
     RS --> TS
-    RC --> EP
     TS --> P
-    EP --> P
-    TP --> LG
-    TP --> BR
+    TC --> P
+    SIC --> P
 ```
 
 ## Layer Description
@@ -71,30 +63,30 @@ graph TB
 Defines the **data format** for RPC communication — the foundation of the entire framework.
 
 - **ProtocolHeader**: 27-byte fixed header containing magic number `0x5250`, version, message type, serialization format, request ID, body length, CRC32 checksum, etc.
-- **Encoder**: Assembles service name + serialized data into a complete packet
-- **Decoder**: Parses binary data, validates magic number and CRC32, extracts message header and body
-- **Serialize**: Serialization interface supporting JSON (nlohmann/json), with Protobuf interface reserved
+- **Encoder**: Assembles service name + serialized data into a complete packet `[header | srv_name | body | check_num(4 bytes)]`
+- **Decoder**: Parses binary data, validates magic number and CRC32, extracts message header and content
+- **Serialize**: Automatic type detection:
+  - `google::protobuf::Message` derived types → Protobuf serialization
+  - Other types → JSON serialization (nlohmann/json)
 
 ### 2. Network Layer (Network)
 
-Responsible for **TCP connection lifecycle management** and **I/O event handling**.
+**TCP connection management** based on the **muduo** network library.
 
-- **TcpServer**: Server-side TCP server based on epoll ET mode, managing listening socket and client connections
-- **EventLoop**: Event loop wrapping Poller's select/update/remove operations
-- **EpollPoller**: Default epoll multiplexer supporting both ET and LT trigger modes
-- **Channel**: Maps file descriptors to event callbacks
-- **TcpConnection**: Wraps TCP connection read/write buffering, message reading and protocol decoding
+- **TcpServer**: Server-side TCP server using muduo `EventLoopThread` for multi-threaded event loop
+- **TcpClient**: Client-side TCP connection wrapper, manages muduo `TcpClient` lifecycle
+- **ConnectionManager**: Connection manager, maintains connection pools to multiple server endpoints
+- **EndPoint**: Network endpoint (host:port), used to identify server nodes
 
 ### 3. RPC Core Layer (Core)
 
-Implements **RPC semantics**: service registration, method binding, request routing, connection pool management.
+Implements **RPC semantics**: service registration, method binding, request routing, connection management.
 
 - **RpcServer**: Service registration and management, maintaining `method name → handler function` mapping
-- **RpcClient**: Singleton RPC client, correlating requests and responses via request_id
-- **IConnectionPool**: Connection pool interface supporting connection borrow and return
-- **RpcConnectionPool**: Concrete connection pool implementation, one pool per service with independent event loop thread
-- **IConnectionPoolFactory**: Connection pool factory, caching pools keyed by `serviceName@groupName`
-- **RpcConnection**: Implements IConnection interface, managing individual TCP connection lifecycle
+- **RpcClient**: Singleton RPC client, correlating requests and responses via `request_id`
+- **ConnectionManager**: Manages connections to multiple server endpoints, randomly selects healthy connections
+- **ServiceInstanceCache**: Nacos service instance subscription cache, based on `EventListener` pattern for real-time updates
+- **PendingRequest**: Pending RPC request, associating connection and promise
 
 ### 4. Common Layer (Common)
 
@@ -102,8 +94,10 @@ Provides **infrastructure components** shared across the framework.
 
 - **ThreadPool**: Thread pool based on `std::packaged_task` + `std::future` for async tasks
 - **Logger**: Logging system with sync/async write support and multi-level filtering
-- **RingBuffer**: Circular buffer supporting scatter-gather I/O (readv/writev)
+- **Config**: TOML configuration file loader, supports service port, Nacos address, etc.
+- **Random**: Thread-safe random number generator based on `mt19937`
 - **CRC32**: Cyclic redundancy check for packet integrity verification
+- **TimeStamp**: Microsecond-precision timestamp
 
 ## Threading Model
 
@@ -111,36 +105,41 @@ Provides **infrastructure components** shared across the framework.
 
 ```mermaid
 graph LR
-    Main[Main Thread: epoll event loop] --> Accept[Accept Client Connections]
+    EL[EventLoopThread: epoll event loop] --> Accept[Accept Client Connections]
     Accept --> Pool[ThreadPool: Process Requests]
-    Pool --> Handler[Decode → RpcServer.Call → Encode → Send]
-    Reg[Background Thread: Nacos Registration]
+    Pool --> Handler[Decode → RpcServer.Invock → Encode → Send]
+    Reg[Nacos Registration Background Thread]
 ```
 
-- **Main Thread**: Runs epoll event loop, handles connection acceptance
-- **ThreadPool**: Processes established connections — decode, RPC invoke, encode response, send
-- **Background Thread**: Registers services with Nacos
+- **EventLoopThread**: muduo event loop thread, handles all I/O events
+- **ThreadPool**: Server-side request processing thread pool
+- **Nacos Registration Thread**: Background thread for Nacos service registration
 
 ### Client Side
 
 ```mermaid
 graph LR
-    Caller[Calling Thread] --> Call[RpcClient.call]
-    Call --> Future[wait_for 5s]
-    Handler[Event Loop Thread: epoll] --> Response[Set promise by request_id]
+    Caller[Calling Thread] --> Call[RpcClient.Call]
+    Call --> Send[Send via ConnectionManager]
+    Send --> Wait[wait_for 200ms timeout]
+    Handler[muduo IO Thread: Receive Response]
+    Handler --> Match[Set promise by request_id]
+    Match --> Wait
 ```
 
-- **Calling Thread**: Calls stub method, serializes params, sends request, blocks waiting for response (5s timeout)
-- **Event Loop Thread**: Each connection pool has its own event loop, matches responses to promises via request_id
+- **Calling Thread**: Calls stub method, serializes params, sends request, blocks waiting for response (200ms timeout)
+- **muduo IO Thread**: TcpClient's internal event loop, matches responses to promises via request_id
+- **ServiceInstanceCache**: Based on Nacos subscription pattern, updates instance list in the background (non-blocking)
 
 ## Data Flow
 
 Complete RPC call flow:
 
-1. **Client**: `stub.method(args)` → `RpcClient::call()` serializes parameters
-2. **Encode**: `Encoder::Encode()` builds complete packet (Header + ServiceName + Body + CRC32)
-3. **Send**: Gets connection from pool, sends packet to server
-4. **Server**: `TcpServer::ClienHandler` reads data → decode → `RpcServer::Call()` finds and invokes handler
-5. **Response**: `Encoder::Encode()` encodes response → sends back to client
-6. **Client**: Receives response → `messageHandler()` finds promise via request_id → `set_value()` → unblocks
-7. **Result**: Deserializes response body, returns to caller
+1. **Client**: `stub.method(args)` → `RpcClient::Call()` serializes parameters
+2. **Encode**: `Encoder::EncodeReq()` builds complete packet (Header + ServiceName + Body + CRC32 CheckNum)
+3. **Service Discovery**: `ServiceInstanceCache` reads instance list from subscription cache (no network IO)
+4. **Send**: `ConnectionManager` randomly selects a healthy connection and sends the packet
+5. **Server**: muduo event loop receives data → `RpcServer::MessageHandler` decodes → `RpcServer::Invock()` finds and invokes handler
+6. **Response**: `Encoder::SuccessRes()` encodes response → sends back to client
+7. **Client**: muduo IO thread receives response → `RpcClient::MessageHandler` finds promise via request_id → `set_value()` → unblocks
+8. **Result**: Deserializes response body, returns to caller

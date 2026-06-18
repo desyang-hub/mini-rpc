@@ -24,7 +24,7 @@ features:
   - icon:
       src: /logo.svg
     title: 异步通信
-    details: 基于 epoll ET 模式的高性能网络 I/O，事件驱动的非阻塞通信模型
+    details: 基于 muduo 网络库的高性能网络 I/O，事件驱动的非阻塞通信模型
   - icon:
       src: /logo.svg
     title: 灵活序列化
