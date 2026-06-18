@@ -4,7 +4,7 @@ cmake_minimum_required(VERSION 3.20)
 # include(cmake/version.cmake)
 # minirpc_extract_version()
 
-project(minirpc VERSION 2.0.0)
+project(minirpc VERSION 2.1.0)
 message(STATUS "Build minirpc: ${MINIRPC_VERSION}")
 
 # setting luchange standerd

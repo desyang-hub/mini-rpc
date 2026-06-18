@@ -46,7 +46,10 @@ jobs:
       - name: Release
         uses: softprops/action-gh-release@v1
         with:
-          files: build/minirpc-*.zip
+          files: |
+            build/minirpc-*.zip
+            build/minirpc-*.tar.gz
+            build/minirpc-*.sh
           draft: false
           prerelease: false
         env:
