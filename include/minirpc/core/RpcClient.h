@@ -14,8 +14,6 @@
 #include <cstdint>
 #include <unordered_map>
 #include <unistd.h>
-#include <queue>
-#include <thread>
 
 #include "minirpc/protocol/Encoder.h"
 #include "minirpc/protocol/Decoder.h"
@@ -29,12 +27,12 @@
 #include "minirpc/core/macro/rpc_service_stub.h"
 #include "minirpc/core/PendingRequest.h"
 #include "minirpc/common/ThreadPool.h"
+#include "minirpc/core/ServiceInstanceCache.h"
 
 #include <muduo/net/InetAddress.h>
 #include <muduo/net/TcpClient.h>
 #include <muduo/net/EventLoop.h>
 #include <atomic>
-#include <Nacos.h>
 
 // rpc client 需要有哪些功能
 // 1. 通过一个宏用于服务函数，这个服务函数无需实现，只需要声明即可
@@ -47,14 +45,10 @@ namespace minirpc
 class RpcClient
 {
 public:
-    class ServiceInstanceListener;
-
     // this 可能会导致异常，如果有条件，尽量换成 shared_ptr
     RpcClient();
 
     ~RpcClient();
-
-    std::list<nacos::Instance> getAllInstances(const std::string& name);
 
     // 获取单实例
     static RpcClient& GetInstance();
@@ -72,21 +66,13 @@ public:
 private:
     mutable std::mutex mutex_;
     std::atomic<uint64_t> id_;
-    // uint64_t id_;
     // promise
     std::unordered_map<uint64_t, PendingRequest> promises_;
 
     ConnectionManager connMgr_;
 
-    using ServiceSearchHandler = std::function<void(nacos::NamingService *)>;
-    std::queue<ServiceSearchHandler> workers_;
-    std::mutex wokers_mutex_;
-    std::condition_variable condition_;
-    std::thread searchServiceWorker_;
-    bool is_close;
-
-    // 搜索服务后台进程
-    void ServiceSearchWorker();
+    // Nacos 服务实例订阅缓存（替代原来的 ServiceSearchWorker + 队列模式）
+    ServiceInstanceCache serviceCache_;
 
     // 消息回调函数
     void MessageHandler(const muduo::net::TcpConnectionPtr& conn, muduo::net::Buffer* buf, muduo::Timestamp t);
@@ -124,21 +110,14 @@ R RpcClient::Call(const char* serviceName, const char* name, Args&& ...args) {
 }
 
 inline std::future<Response> RpcClient::AsyncInvoke(const char* name, const Bytes& bytes, uint64_t request_id) {
-    std::list<nacos::Instance> instances;
-    // nacos::Instance instance;
-    // instance.ip = "127.0.0.1";
-    // instance.port = 8083;
-    // instances.push_back(std::move(instance));
+    // 首次调用时订阅该服务
+    serviceCache_.subscribeService(name);
 
+    // 从订阅缓存中读取实例列表（无阻塞，无网络 IO）
+    std::list<nacos::Instance> instances = serviceCache_.getInstances(name);
 
-    // 获取可用实例
-    try
-    {
-        instances = std::move(getAllInstances(name));
-    }
-    catch(const std::exception& e)
-    {
-        LOG_ERROR("getAllInstances err: %s", e.what());
+    if (instances.empty()) {
+        LOG_ERROR("No instances available for service: %s", name);
         LOG_INFO("Switch to mock server");
         nacos::Instance instance;
         instance.ip = "127.0.0.1";
