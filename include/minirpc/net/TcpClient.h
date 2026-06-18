@@ -22,6 +22,8 @@
 #include "minirpc/net/EndPoint.h"
 #include "minirpc/common/nonecopyable.h"
 
+#include <iostream>
+
 namespace minirpc
 {
 
@@ -31,7 +33,7 @@ class TcpClient : public nonecopyable, public std::enable_shared_from_this<TcpCl
 {
 public:
     TcpClient(const EndPoint &ep, ConnectionManager* connMgr = nullptr);
-    ~TcpClient() = default;
+    ~TcpClient();
 
     void Start();
 
@@ -54,10 +56,9 @@ public:
 private:
     EndPoint ep_;
     ConnectionManager* connMgr_;
-    muduo::net::EventLoopThread loop_;
-    muduo::net::InetAddress serverAddr_;
     muduo::net::MessageCallback messageCallBack_;
-    std::unique_ptr<muduo::net::TcpClient> clients_;
+    std::shared_ptr<muduo::net::TcpClient> client_;
+    muduo::net::EventLoopThread loop_;
     muduo::net::TcpConnectionPtr conns_; // 与 clients_ 一一对应
 
     std::mutex mutex_;

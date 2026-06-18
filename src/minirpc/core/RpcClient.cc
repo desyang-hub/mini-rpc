@@ -4,7 +4,7 @@
  * @Author       : desyang
  * @Date         : 2026-06-08 15:18:23
  * @LastEditors  : desyang
- * @LastEditTime : 2026-06-17 15:22:22
+ * @LastEditTime : 2026-06-18 17:59:24
 **/
 
 #include "minirpc/core/RpcClient.h"
@@ -30,6 +30,24 @@
 
 namespace minirpc
 {
+
+
+// class RpcClient::ServiceInstanceListener : public nacos::EventListener {
+// private:
+//     int num;
+// public:
+//     ServiceInstanceListener(int num) {
+//         this->num = num;
+//     }
+
+//     void receiveNamingInfo(const nacos::ServiceInfo &serviceInfo) override {
+//         cout << "===================================" << endl;
+//         cout << "Watcher: " << num << endl;
+//         cout << "Watched service UPDATED: " << serviceInfo.toInstanceString() << endl;
+//         cout << "===================================" << endl;
+
+//     }
+// };
 
 RpcClient& RpcClient::GetInstance() {
     static RpcClient rpcClient;
@@ -114,13 +132,19 @@ void RpcClient::MessageHandler(const muduo::net::TcpConnectionPtr& conn, muduo::
             // LOG_INFO("rid: %d", id);
             buf->retrieve(pkg_len);
 
-            std::lock_guard<std::mutex> lock(mutex_);
+            
+
+            std::unique_lock<std::mutex> lock(mutex_);
             if (promises_.count(id) == 0) {
-                
                 throw RpcException("promise id not exists. ");
             }
-            promises_[id].set_value(std::move(resp));
+            auto p = std::move(promises_[id]);
             promises_.erase(id);
+            lock.unlock();
+
+            p.promise.set_value(std::move(resp));
+            p.conn->recovery();
+            
         }
     }
 

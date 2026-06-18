@@ -4,7 +4,7 @@
  * @Author       : desyang
  * @Date         : 2026-06-08 15:18:23
  * @LastEditors  : desyang
- * @LastEditTime : 2026-06-17 15:39:07
+ * @LastEditTime : 2026-06-18 17:55:36
 **/
 #pragma once
 
@@ -28,6 +28,7 @@
 #include "minirpc/net/ConnectionManager.h"
 #include "minirpc/core/macro/rpc_service_stub.h"
 #include "minirpc/core/PendingRequest.h"
+#include "minirpc/common/ThreadPool.h"
 
 #include <muduo/net/InetAddress.h>
 #include <muduo/net/TcpClient.h>
@@ -46,6 +47,8 @@ namespace minirpc
 class RpcClient
 {
 public:
+    class ServiceInstanceListener;
+
     // this 可能会导致异常，如果有条件，尽量换成 shared_ptr
     RpcClient();
 
@@ -71,7 +74,7 @@ private:
     std::atomic<uint64_t> id_;
     // uint64_t id_;
     // promise
-    std::unordered_map<uint64_t, std::promise<Response>> promises_;
+    std::unordered_map<uint64_t, PendingRequest> promises_;
 
     ConnectionManager connMgr_;
 
@@ -122,6 +125,12 @@ R RpcClient::Call(const char* serviceName, const char* name, Args&& ...args) {
 
 inline std::future<Response> RpcClient::AsyncInvoke(const char* name, const Bytes& bytes, uint64_t request_id) {
     std::list<nacos::Instance> instances;
+    // nacos::Instance instance;
+    // instance.ip = "127.0.0.1";
+    // instance.port = 8083;
+    // instances.push_back(std::move(instance));
+
+
     // 获取可用实例
     try
     {
@@ -141,17 +150,17 @@ inline std::future<Response> RpcClient::AsyncInvoke(const char* name, const Byte
     eps.reserve(instances.size());
 
     for (auto it = instances.begin(); it != instances.end(); ++it) {
-        LOG_INFO("valid Instance: %s:%d", it->ip.c_str(), it->port);
+        // LOG_INFO("valid Instance: %s:%d", it->ip.c_str(), it->port);
         eps.emplace_back(it->ip, it->port);
     }
 
     TcpClientPtr tcpClientPtr = connMgr_.getConnection(eps);
-    
     std::unique_lock<std::mutex> lock(mutex_);
-    promises_[request_id] = std::promise<Response>();
-    std::future<Response> f = promises_[request_id].get_future();
-    tcpClientPtr->sendRequest(bytes.data(), bytes.size());
+    promises_[request_id] = PendingRequest{tcpClientPtr, std::promise<Response>()};
+    std::future<Response> f = promises_[request_id].promise.get_future();
     lock.unlock();
+
+    tcpClientPtr->sendRequest(bytes.data(), bytes.size());
 
     return f;
 

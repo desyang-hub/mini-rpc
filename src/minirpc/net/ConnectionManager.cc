@@ -52,6 +52,11 @@ public:
         return newTcpClient;
     }
 
+    ~Impl() {
+        std::lock_guard<std::mutex> lock(mutex_);
+        std::cout << "Total vlaid linked: " << tcpClients_.size() << std::endl;
+    }
+
     TcpClientPtr getConnection(const std::vector<EndPoint> &eps, ConnectionManager* connMgr)
     {
         if (eps.empty()) {
@@ -79,6 +84,7 @@ public:
                 })) {
                 throw RpcException("Timeout error");
             }
+
             
             if (flag) {
                 for (const auto &ep : eps) {
@@ -90,9 +96,10 @@ public:
                         return conn;
                     }
                 }
-            } else {
-                cnt_.fetch_add(1, std::memory_order_relaxed);
             }
+            else {
+                cnt_.fetch_add(1, std::memory_order_relaxed);
+            } 
         }
         
 
@@ -141,11 +148,15 @@ public:
     }
 
     void recovery(TcpClientPtr ptr) {
+        // std::cout << "tcp Client size: " << tcpClients_.size() << std::endl;
         {
             std::lock_guard<std::mutex> lock(mutex_);
             tcpClients_[ptr->endPoint()].push(ptr);
         }
         condition_.notify_one();
+
+        // std::cout << "tcp Client size: " << tcpClients_.size() << std::endl;
+        // std::cout << "tcp client totoal: " << cnt_.load() << std::endl;
     }
 };
 

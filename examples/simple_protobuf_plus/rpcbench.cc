@@ -107,6 +107,11 @@ int main(int argc, char* argv[]) {
     double avg_latency_ms = (total_success > 0) ? (total_latency / 1000.0 / total_success) : 0;
     double qps = (total_seconds > 0) ? (total_success / total_seconds) : 0;
 
+    // 3. 打印压测配置
+    std::cout << "================ MiniRPC Benchmark ================" << std::endl;
+    std::cout << "Target: " << host << ":" << port << std::endl;
+    std::cout << "Concurrency: " << concurrency << ", Total Requests: " << total_requests << std::endl;
+    std::cout << "===================================================" << std::endl;
     std::cout << "\n================ Benchmark Results ================" << std::endl;
     std::cout << std::fixed << std::setprecision(2);
     std::cout << "Total Time:      " << total_seconds << " s" << std::endl;

@@ -4,7 +4,7 @@
  * @Author       : desyang
  * @Date         : 2026-06-08 16:19:14
  * @LastEditors  : desyang
- * @LastEditTime : 2026-06-17 15:40:15
+ * @LastEditTime : 2026-06-18 14:57:49
 **/
 
 #include "minirpc/core/RpcServer.h"
@@ -93,17 +93,31 @@ void RpcServer::addServiceInstance(const char* name, const char* groupName, cons
 /// @param resp 返回序列化后的结果
 /// return
 bool RpcServer::Invock(const std::string& srvName, const std::string& req, std::string& resp) {
-    std::shared_lock<std::shared_mutex> lock(mutex_);
-    // handlers_[srvName](req, resp);
-    try {
-        handlers_.at(srvName)(req, resp); // .at() 会在 key 不存在时抛出 std::out_of_range
-        return true;
-    } catch (const std::out_of_range& e) {
+    RpcHandler handler; // 假设你的 handler 支持拷贝或移动
+    bool found = false;
+
+    {
+        // 1. 极小范围的读锁：仅仅用来拷贝出函数指针/对象
+        std::shared_lock<std::shared_mutex> lock(mutex_);
+        auto it = handlers_.find(srvName);
+        if (it != handlers_.end()) {
+            handler = it->second;
+            found = true;
+        }
+    } // 2. 出了这个括号，锁就立刻释放了！
+
+    // 3. 在锁的外面执行真正的业务逻辑！
+    if (found) {
+        try {
+            handler(req, resp);
+            return true;
+        } catch (const std::exception& e) {
+            resp = e.what();
+            LOG_ERROR("Service %s invoke err: %s", srvName.c_str(), resp.c_str());
+            return false;
+        }
+    } else {
         LOG_ERROR("RPC service not found: %s", srvName.c_str());
-        return false;
-    } catch (const std::exception& e) {
-        resp = e.what();
-        LOG_ERROR("Service %s invoke err: %s", srvName.c_str(), resp.c_str());
         return false;
     }
 }
@@ -139,18 +153,22 @@ void RpcServer::MessageHandler(const muduo::net::TcpConnectionPtr& conn,
             std::string resp;
 
             uint64_t rid = Decoder::Decode(buf->peek(), srvName, body);
-            LOG_INFO("request id: %lu", rid);
+            // LOG_INFO("request id: %lu", rid);
             buf->retrieve(pkg_len);
 
-            bool isSuccess = Invock(srvName, body, resp);
-            Bytes bytes;
 
-            if (isSuccess) {
-                bytes = Encoder::SuccessRes(rid, resp.c_str(), resp.size());
-            } else {
-                bytes = Encoder::ErrorRes(rid, ERR, resp.c_str());
-            }
-            conn->send(bytes.data(), bytes.size());
+            threadPool_.enqueue([srvName = std::move(srvName), body = std::move(body), this, conn, rid]{
+                std::string resp;
+                bool isSuccess = Invock(srvName, body, resp);
+
+                Bytes bytes;
+                if (isSuccess) {
+                    bytes = Encoder::SuccessRes(rid, resp.c_str(), resp.size());
+                } else {
+                    bytes = Encoder::ErrorRes(rid, ERR, resp.c_str());
+                }
+                conn->send(bytes.data(), bytes.size());
+            });
         }
     }
 }

@@ -15,9 +15,6 @@ epoll_wait 在没有事件时永久阻塞，且无法通过关闭 fd 或修改�
 ### 遇到一个坑
 对于muduo库的回调，必须要多次处理缓冲区中的完整包，因为消息回调过程可能缓冲区中已经
 
-
-
-
 ### muduo库的回调，必须要多次处理缓冲区中的完整包，因为消息回调过程可能缓冲区中已经
 这是rpc测试工具，对于100个线程，每个线程1000次请求的结果为
 ================ Benchmark Results ================
@@ -26,4 +23,31 @@ Success:         100000
 Failed:          0
 QPS:             3130.74
 Avg Latency:     31.83 ms
+===================================================
+
+
+### 遇到一个大坑，对于muduo库的使用，如下，EventLoopThread必须要在std::shared_ptr<muduo::net::TcpClient> client_的后面声明，确保析构顺序，否则会发生竞争导致未知异常
+EndPoint ep_;
+ConnectionManager* connMgr_;
+muduo::net::MessageCallback messageCallBack_;
+std::shared_ptr<muduo::net::TcpClient> client_;
+muduo::net::EventLoopThread loop_;
+muduo::net::TcpConnectionPtr conns_; // 与 clients_ 一一对应
+
+std::mutex mutex_;
+std::condition_variable condition_;
+std::atomic<bool> is_connected_;
+
+
+================ MiniRPC Benchmark ================
+Target: 127.0.0.1:8083
+Concurrency: 1000, Total Requests: 100000
+===================================================
+
+================ Benchmark Results ================
+Total Time:      3.77 s
+Success:         100000
+Failed:          0
+QPS:             26502.20
+Avg Latency:     34.55 ms
 ===================================================

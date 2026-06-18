@@ -17,7 +17,14 @@ TcpServer::TcpServer(int port, const char *name, size_t thread_num)
 {
     auto loop_ = loopThread.startLoop();
     server_ = std::make_shared<muduo::net::TcpServer>(loop_, addr_, name);
-    server_->setThreadNum(thread_num);
+
+    // 确保线程数设置正确
+    // 在 IO 线程中安全地创建和配置 TcpServer
+    loop_->runInLoop([this, thread_num]() {
+        if (thread_num > 0) {
+            server_->setThreadNum(thread_num);
+        }
+    });
 }
 
 TcpServer::~TcpServer() = default;

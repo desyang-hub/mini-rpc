@@ -18,7 +18,7 @@ namespace minirpc
 class TcpServer
 {
 public:
-    explicit TcpServer(int port = 8080, const char *name = "TcpServer", size_t thread_num = 4);
+    explicit TcpServer(int port = 8080, const char *name = "TcpServer", size_t thread_num = 8);
     ~TcpServer();
 
     /// @brief 用于设置消息回调
@@ -30,9 +30,9 @@ public:
     void Stop();
 
 private:
-    muduo::net::EventLoopThread loopThread;
     muduo::net::InetAddress addr_;
     std::shared_ptr<muduo::net::TcpServer> server_;
+    muduo::net::EventLoopThread loopThread;
 };
 
 

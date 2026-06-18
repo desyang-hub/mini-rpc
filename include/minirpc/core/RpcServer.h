@@ -4,7 +4,7 @@
  * @Author       : desyang
  * @Date         : 2026-06-08 16:19:14
  * @LastEditors  : desyang
- * @LastEditTime : 2026-06-17 14:58:12
+ * @LastEditTime : 2026-06-18 14:51:21
 **/
 #pragma once
 
@@ -30,6 +30,8 @@
 #include "minirpc/protocol/Encoder.h"
 #include "minirpc/net/TcpServer.h"
 
+#include "minirpc/common/ThreadPool.h"
+
 #include <memory>
 #include "Nacos.h"
 // #include "nacos/Nacos.h"
@@ -46,6 +48,9 @@ private:
     std::unordered_map<std::string, RequestHandler> handlers_;
     std::vector<std::string> service_names_;
     mutable std::shared_mutex mutex_;
+
+    ThreadPool threadPool_;
+    
     std::unique_ptr<TcpServer> tcpServer_;
     int port_;
 
