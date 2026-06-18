@@ -39,8 +39,6 @@ void bench_worker(size_t requests_per_thread) {
             g_fail.fetch_add(1, std::memory_order_relaxed);
         }
     }
-
-    LOG_INFO("Thread quit");
 }
 
 // 打印使用说明

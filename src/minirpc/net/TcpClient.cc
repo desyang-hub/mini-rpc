@@ -46,55 +46,82 @@ TcpClient::TcpClient(const EndPoint &ep, ConnectionManager* connMgr)
 TcpClient::~TcpClient()
 {
     muduo::net::EventLoop* loop = nullptr;
+    muduo::net::TcpConnectionPtr conn;
 
     {
         std::lock_guard<std::mutex> lock(mutex_);
         if (client_) {
             loop = client_->getLoop();
         }
-        // ⚠️ 关键：先释放我们对 TcpConnection 的引用
-        // muduo TcpClient::~TcpClient() 中会检查 connection_.unique()：
-        //   - unique() == true  → 调用 forceClose()（强制断开）
-        //   - unique() == false → 不调用 forceClose()（认为还有其他人引用）
-        // 如果我们的 conns_ 还活着，unique() == false，muduo 不会强制关闭，
-        // 导致 TcpConnection 以 kConnected 状态被销毁 → 触发 assert(state_ == kDisconnected)
+        conn = conns_;
         conns_.reset();
     }
 
     if (client_) {
-        // muduo TcpClient 设计上允许在主线程调用 disconnect()，
-        // 但实际清理（removeConnection, connectDestroyed, channel_->remove）
-        // 都是通过 runInLoop/queueInLoop 异步投递到 IO 线程执行的。
-        //
-        // muduo TcpClient::~TcpClient() 流程：
-        //   1. 复制 connection_ shared_ptr（增加引用计数）
-        //   2. runInLoop(setCloseCallback) — 异步
-        //   3. 如果 unique() → forceClose() → queueInLoop(forceCloseInLoop) — 异步
-        //   4. ~TcpClient 返回，muduo 端的 connection_ 引用释放
-        //
-        // 策略：先 reset client_（触发 muduo ~TcpClient 投递清理任务），
-        // 然后通过 CountDownLatch 在 IO 线程中等待，确保所有 pending functors
-        // （setCloseCallback, forceCloseInLoop, handleClose, connectDestroyed,
-        //  channel_->remove）都已执行完毕后，再退出 EventLoop。
-
-        client_.reset();  // 触发 muduo TcpClient 析构，投递所有清理任务
-
         if (loop && !loop->isInLoopThread()) {
+            // muduo ~TcpClient() pendingFunctors_ 执行顺序分析：
+            //
+            // ~TcpClient() 投递：
+            //   A: runInLoop(setCloseCallback)   — 设置 closeCallback = removeConnection
+            //   B: queueInLoop(forceCloseInLoop)  — handleClose → closeCallback() →
+            //                                            removeConnection() →
+            //                                            queueInLoop(connectDestroyed)
+            //
+            //   connectDestroyed → channel_->remove() — 这才是设置 addedToLoop_ = false 的地方
+            //
+            // 所以 pendingFunctors_ 顺序：
+            //   1. setCloseCallback
+            //   2. forceCloseInLoop  → 内部 queueInLoop(connectDestroyed) → 追加到队尾
+            //   3. latch1.countDown  (我们投递的屏障1)
+            //   4. connectDestroyed  (由 forceCloseInLoop 内部追加)
+            //
+            // 我们的 latch1 在 connectDestroyed 之前执行！所以需要在 connectDestroyed
+            // 之后再加一个屏障。
+            //
+            // 解决：在 pendingFunctors_ 中先投递我们的屏障 C（在 connectDestroyed 之前），
+            // 但 connectDestroyed 会在 forceCloseInLoop 内部被 queueInLoop 追加。
+            // 所以屏障 C 在位置 3，connectDestroyed 在位置 4。
+            //
+            // 正确做法：投递两个屏障，或者更好的——让 connectDestroyed 完成后触发信号。
+
+            conn.reset();  // 释放引用，让 muduo unique() == true
+
             muduo::CountDownLatch latch(1);
-            loop->runInLoop([&latch]() {
-                // 屏障：执行到这里时，所有之前通过 runInLoop/queueInLoop 投递的
-                // 任务都已在当前 poll 循环的 doPendingFunctors() 中执行完毕。
+
+            client_.reset();
+            // ~TcpClient 投递 A(setCloseCallback) 和 B(forceCloseInLoop)
+            // B 内部会 queueInLoop(connectDestroyed) — 在队尾
+
+            // 我们的 latch 在 connectDestroyed 之后投递
+            // 但由于 connectDestroyed 是在 B 执行时才追加的，我们这里的 runInLoop
+            // 会排在 connectDestroyed 之前（位置 3 vs 位置 4）。
+            //
+            // 所以我们需要两个 latch：
+            muduo::CountDownLatch latch2(1);
+
+            // 方案：在 IO 线程中，先等所有 pending 完成，再等下一轮 pending 完成
+            loop->runInLoop([loop, &latch, &latch2]() {
+                // 第一轮屏障 — 此时 A, B 已完成，但 connectDestroyed 刚被追加
+                // connectDestroyed 会在下一次 doPendingFunctors 执行
                 latch.countDown();
+
+                // 在 connectDestroyed 之后执行 latch2.countDown
+                loop->queueInLoop([&latch2]() {
+                    latch2.countDown();
+                });
             });
-            latch.wait();
+
+            // 等待 connectDestroyed 完成
+            latch2.wait();
+        } else {
+            conn.reset();
+            client_.reset();
         }
 
-        // 退出 IO 线程 — 此时 TcpConnection 已 kDisconnected，Channel 已 remove
         if (loop) {
             loop->quit();
         }
     }
-    // loop_ 析构时会 join IO 线程（loop_->quit() 已在上一步调用）
 }
 
 void TcpClient::Start()

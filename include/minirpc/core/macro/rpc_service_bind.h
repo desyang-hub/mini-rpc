@@ -63,6 +63,69 @@ do { \
     _RPC_BIND_METHOD(Class, M4);                    \
     _RPC_BIND_METHOD(Class, M5)
 
+#define _RPC_BIND_IMPL_7(Class, M1, M2, M3, M4, M5, M6) \
+    _RPC_BIND_METHOD(Class, M1);                        \
+    _RPC_BIND_METHOD(Class, M2);                        \
+    _RPC_BIND_METHOD(Class, M3);                        \
+    _RPC_BIND_METHOD(Class, M4);                        \
+    _RPC_BIND_METHOD(Class, M5);                        \
+    _RPC_BIND_METHOD(Class, M6)
+
+#define _RPC_BIND_IMPL_8(Class, M1, M2, M3, M4, M5, M6, M7) \
+    _RPC_BIND_METHOD(Class, M1);                            \
+    _RPC_BIND_METHOD(Class, M2);                            \
+    _RPC_BIND_METHOD(Class, M3);                            \
+    _RPC_BIND_METHOD(Class, M4);                            \
+    _RPC_BIND_METHOD(Class, M5);                            \
+    _RPC_BIND_METHOD(Class, M6);                            \
+    _RPC_BIND_METHOD(Class, M7)
+
+#define _RPC_BIND_IMPL_9(Class, M1, M2, M3, M4, M5, M6, M7, M8) \
+    _RPC_BIND_METHOD(Class, M1);                                \
+    _RPC_BIND_METHOD(Class, M2);                                \
+    _RPC_BIND_METHOD(Class, M3);                                \
+    _RPC_BIND_METHOD(Class, M4);                                \
+    _RPC_BIND_METHOD(Class, M5);                                \
+    _RPC_BIND_METHOD(Class, M6);                                \
+    _RPC_BIND_METHOD(Class, M7);                                \
+    _RPC_BIND_METHOD(Class, M8)
+
+#define _RPC_BIND_IMPL_10(Class, M1, M2, M3, M4, M5, M6, M7, M8, M9) \
+    _RPC_BIND_METHOD(Class, M1);                                     \
+    _RPC_BIND_METHOD(Class, M2);                                     \
+    _RPC_BIND_METHOD(Class, M3);                                     \
+    _RPC_BIND_METHOD(Class, M4);                                     \
+    _RPC_BIND_METHOD(Class, M5);                                     \
+    _RPC_BIND_METHOD(Class, M6);                                     \
+    _RPC_BIND_METHOD(Class, M7);                                     \
+    _RPC_BIND_METHOD(Class, M8);                                     \
+    _RPC_BIND_METHOD(Class, M9)
+
+#define _RPC_BIND_IMPL_11(Class, M1, M2, M3, M4, M5, M6, M7, M8, M9, M10) \
+    _RPC_BIND_METHOD(Class, M1);                                          \
+    _RPC_BIND_METHOD(Class, M2);                                          \
+    _RPC_BIND_METHOD(Class, M3);                                          \
+    _RPC_BIND_METHOD(Class, M4);                                          \
+    _RPC_BIND_METHOD(Class, M5);                                          \
+    _RPC_BIND_METHOD(Class, M6);                                          \
+    _RPC_BIND_METHOD(Class, M7);                                          \
+    _RPC_BIND_METHOD(Class, M8);                                          \
+    _RPC_BIND_METHOD(Class, M9);                                          \
+    _RPC_BIND_METHOD(Class, M10)
+
+#define _RPC_BIND_IMPL_12(Class, M1, M2, M3, M4, M5, M6, M7, M8, M9, M10, M11) \
+    _RPC_BIND_METHOD(Class, M1);                                               \
+    _RPC_BIND_METHOD(Class, M2);                                               \
+    _RPC_BIND_METHOD(Class, M3);                                               \
+    _RPC_BIND_METHOD(Class, M4);                                               \
+    _RPC_BIND_METHOD(Class, M5);                                               \
+    _RPC_BIND_METHOD(Class, M6);                                               \
+    _RPC_BIND_METHOD(Class, M7);                                               \
+    _RPC_BIND_METHOD(Class, M8);                                               \
+    _RPC_BIND_METHOD(Class, M9);                                               \
+    _RPC_BIND_METHOD(Class, M10);                                              \
+    _RPC_BIND_METHOD(Class, M11)
+
 // 4. 分发宏
 // 关键修改：直接将 Class 和 __VA_ARGS__ 一起传给计数器和分发器
 // 4. 分发宏

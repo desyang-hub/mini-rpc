@@ -23,7 +23,20 @@
 
 
 
-// 2. 定义不同参数数量的实现宏
+// 2. 参数计数器（self-contained — 不依赖 bind.h）
+#define _STUB_PP_NARG(...) \
+    _STUB_PP_NARG_(__VA_ARGS__, _STUB_PP_RSEQ_N())
+#define _STUB_PP_NARG_(...) \
+    _STUB_PP_ARG_N(__VA_ARGS__)
+#define _STUB_PP_ARG_N(                                     \
+    _1, _2, _3, _4, _5, _6, _7, _8, _9, _10,              \
+    _11, _12, _13, _14, _15, _16, _17, _18, _19, _20,     \
+    N, ...) N
+#define _STUB_PP_RSEQ_N()                         \
+    20, 19, 18, 17, 16, 15, 14, 13, 12, 11,       \
+    10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0
+
+// 3. 定义不同参数数量的实现宏
 // 注意：第一个参数永远是 Class，后面才是方法
 #define _RPC_STUB_IMPL_1(Class, M1) \
     _RPC_STUB_METHOD(Class, M1)
@@ -50,7 +63,84 @@
     _RPC_STUB_METHOD(Class, M4) \
     _RPC_STUB_METHOD(Class, M5)
 
-// 3. 分发宏 (核心逻辑)
+#define _RPC_STUB_IMPL_6(Class, M1, M2, M3, M4, M5, M6) \
+    _RPC_STUB_METHOD(Class, M1) \
+    _RPC_STUB_METHOD(Class, M2) \
+    _RPC_STUB_METHOD(Class, M3) \
+    _RPC_STUB_METHOD(Class, M4) \
+    _RPC_STUB_METHOD(Class, M5) \
+    _RPC_STUB_METHOD(Class, M6)
+
+#define _RPC_STUB_IMPL_7(Class, M1, M2, M3, M4, M5, M6, M7) \
+    _RPC_STUB_METHOD(Class, M1) \
+    _RPC_STUB_METHOD(Class, M2) \
+    _RPC_STUB_METHOD(Class, M3) \
+    _RPC_STUB_METHOD(Class, M4) \
+    _RPC_STUB_METHOD(Class, M5) \
+    _RPC_STUB_METHOD(Class, M6) \
+    _RPC_STUB_METHOD(Class, M7)
+
+#define _RPC_STUB_IMPL_8(Class, M1, M2, M3, M4, M5, M6, M7, M8) \
+    _RPC_STUB_METHOD(Class, M1) \
+    _RPC_STUB_METHOD(Class, M2) \
+    _RPC_STUB_METHOD(Class, M3) \
+    _RPC_STUB_METHOD(Class, M4) \
+    _RPC_STUB_METHOD(Class, M5) \
+    _RPC_STUB_METHOD(Class, M6) \
+    _RPC_STUB_METHOD(Class, M7) \
+    _RPC_STUB_METHOD(Class, M8)
+
+#define _RPC_STUB_IMPL_9(Class, M1, M2, M3, M4, M5, M6, M7, M8, M9) \
+    _RPC_STUB_METHOD(Class, M1) \
+    _RPC_STUB_METHOD(Class, M2) \
+    _RPC_STUB_METHOD(Class, M3) \
+    _RPC_STUB_METHOD(Class, M4) \
+    _RPC_STUB_METHOD(Class, M5) \
+    _RPC_STUB_METHOD(Class, M6) \
+    _RPC_STUB_METHOD(Class, M7) \
+    _RPC_STUB_METHOD(Class, M8) \
+    _RPC_STUB_METHOD(Class, M9)
+
+#define _RPC_STUB_IMPL_10(Class, M1, M2, M3, M4, M5, M6, M7, M8, M9, M10) \
+    _RPC_STUB_METHOD(Class, M1) \
+    _RPC_STUB_METHOD(Class, M2) \
+    _RPC_STUB_METHOD(Class, M3) \
+    _RPC_STUB_METHOD(Class, M4) \
+    _RPC_STUB_METHOD(Class, M5) \
+    _RPC_STUB_METHOD(Class, M6) \
+    _RPC_STUB_METHOD(Class, M7) \
+    _RPC_STUB_METHOD(Class, M8) \
+    _RPC_STUB_METHOD(Class, M9) \
+    _RPC_STUB_METHOD(Class, M10)
+
+#define _RPC_STUB_IMPL_11(Class, M1, M2, M3, M4, M5, M6, M7, M8, M9, M10, M11) \
+    _RPC_STUB_METHOD(Class, M1) \
+    _RPC_STUB_METHOD(Class, M2) \
+    _RPC_STUB_METHOD(Class, M3) \
+    _RPC_STUB_METHOD(Class, M4) \
+    _RPC_STUB_METHOD(Class, M5) \
+    _RPC_STUB_METHOD(Class, M6) \
+    _RPC_STUB_METHOD(Class, M7) \
+    _RPC_STUB_METHOD(Class, M8) \
+    _RPC_STUB_METHOD(Class, M9) \
+    _RPC_STUB_METHOD(Class, M10) \
+    _RPC_STUB_METHOD(Class, M11)
+
+#define _RPC_STUB_IMPL_12(Class, M1, M2, M3, M4, M5, M6, M7, M8, M9, M10, M11, M12) \
+    _RPC_STUB_METHOD(Class, M1) \
+    _RPC_STUB_METHOD(Class, M2) \
+    _RPC_STUB_METHOD(Class, M3) \
+    _RPC_STUB_METHOD(Class, M4) \
+    _RPC_STUB_METHOD(Class, M5) \
+    _RPC_STUB_METHOD(Class, M6) \
+    _RPC_STUB_METHOD(Class, M7) \
+    _RPC_STUB_METHOD(Class, M8) \
+    _RPC_STUB_METHOD(Class, M9) \
+    _RPC_STUB_METHOD(Class, M10) \
+    _RPC_STUB_METHOD(Class, M11) \
+    _RPC_STUB_METHOD(Class, M12)
+
+// 4. 分发宏 (核心逻辑)
 // 这里的逻辑是：_RPC_STUB_ALL(UserService, add, sub, print)
 // PP_NARG(add, sub, print) 应该返回 3
 // 然后拼接出 _RPC_STUB_IMPL_3(UserService, add, sub, print)
@@ -60,7 +150,7 @@
 
 // 这里的 N 是通过 PP_NARG 计算出来的方法数量
 #define _RPC_STUB_DISPATCH(Func, Class, ...) \
-    _RPC_STUB_DISPATCH_(_RPC_STUB_DISPATCH__, Func, PP_NARG(__VA_ARGS__), Class, __VA_ARGS__)
+    _RPC_STUB_DISPATCH_(_RPC_STUB_DISPATCH__, Func, _STUB_PP_NARG(__VA_ARGS__), Class, __VA_ARGS__)
 
 #define _RPC_STUB_DISPATCH_(CALLBACK, Func, N, Class, ...) \
     CALLBACK(Func, N, Class, __VA_ARGS__)
