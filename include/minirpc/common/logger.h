@@ -25,37 +25,40 @@
 minirpc::Logger::GetInstance().enable_async_log_write()
 
 #define LOG_INFO(format, ...) \
-    if (minirpc::Logger::GetInstance().getLevel() >= minirpc::INFO) {                                    \
-        char buf[1024];                     \
-        snprintf(buf, 1024, format, ##__VA_ARGS__);\
-        minirpc::Logger::GetInstance().log(buf, minirpc::INFO);     \
-    };
-
+    do { \
+        if (minirpc::Logger::GetInstance().getLevel() >= minirpc::INFO) { \
+            char buf[1024]; \
+            snprintf(buf, 1024, format, ##__VA_ARGS__); \
+            minirpc::Logger::GetInstance().log(buf, minirpc::INFO); \
+        } \
+    } while (0)
 
 #define LOG_ERROR(format, ...) \
-if (minirpc::Logger::GetInstance().getLevel() >= minirpc::ERROR) {                                    \
-        char buf[1024];                     \
-        snprintf(buf, 1024, format, ##__VA_ARGS__);\
-        minirpc::Logger::GetInstance().log(buf, minirpc::ERROR);     \
-    }; 
+    do { \
+        if (minirpc::Logger::GetInstance().getLevel() >= minirpc::ERROR) { \
+            char buf[1024]; \
+            snprintf(buf, 1024, format, ##__VA_ARGS__); \
+            minirpc::Logger::GetInstance().log(buf, minirpc::ERROR); \
+        } \
+    } while (0)
 
 #define LOG_FATAL(format, ...) \
-if (true) {                                    \
-        char buf[1024];                     \
+    do { \
+        char buf[1024]; \
         snprintf(buf, 1024, "%s:%d %s ", __FILE__, __LINE__, __FUNCTION__); \
         snprintf(buf + strlen(buf), sizeof(buf) - strlen(buf), format, ##__VA_ARGS__); \
-        minirpc::Logger::GetInstance().log(buf, minirpc::FATAL);     \
+        minirpc::Logger::GetInstance().log(buf, minirpc::FATAL); \
         throw std::runtime_error(buf); \
-    }
+    } while (0)
 
-
-// 为了避免debug输出太多信息
 #define LOG_DEBUG(format, ...) \
-if (minirpc::Logger::GetInstance().getLevel() >= minirpc::DEBUG) {                                    \
-        char buf[1024];                     \
-        snprintf(buf, 1024, format, ##__VA_ARGS__);\
-        minirpc::Logger::GetInstance().log(buf, minirpc::DEBUG);     \
-    }; 
+    do { \
+        if (minirpc::Logger::GetInstance().getLevel() >= minirpc::DEBUG) { \
+            char buf[1024]; \
+            snprintf(buf, 1024, format, ##__VA_ARGS__); \
+            minirpc::Logger::GetInstance().log(buf, minirpc::DEBUG); \
+        } \
+    } while (0) 
 
 
 // 定义日志级别

@@ -26,7 +26,7 @@ target_link_libraries(rpcbench PRIVATE
     ${Protobuf_LIBRARIES}
     core net protocol common nlohmann_json::nlohmann_json muduo_net muduo_base nacos::nacos-cli
 )
-target_compile_options(rpcbench PRIVATE -fsanitize=address -fno-omit-frame-pointer -O1)
-target_link_options(rpcbench PRIVATE -fsanitize=address)
+# target_compile_options(rpcbench PRIVATE -fsanitize=address -fno-omit-frame-pointer -O1)
+# target_link_options(rpcbench PRIVATE -fsanitize=address)
 
 configure_file(config.toml ${CMAKE_CURRENT_BINARY_DIR}/config.toml COPYONLY)

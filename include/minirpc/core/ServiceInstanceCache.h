@@ -18,12 +18,13 @@ class ServiceChangeListener : public nacos::EventListener
 {
 private:
     std::unordered_map<std::string, std::list<nacos::Instance>>& cache_;
-    mutable std::shared_mutex cacheMutex_;
+    std::shared_mutex& cacheMutex_;
 
 public:
     explicit ServiceChangeListener(
-        std::unordered_map<std::string, std::list<nacos::Instance>>& c)
-        : cache_(c) {}
+        std::unordered_map<std::string, std::list<nacos::Instance>>& c,
+        std::shared_mutex& m)
+        : cache_(c), cacheMutex_(m) {}
 
     void receiveNamingInfo(const nacos::ServiceInfo& info) override
     {

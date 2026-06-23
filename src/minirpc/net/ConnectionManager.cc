@@ -28,13 +28,15 @@ public:
             if (it != pool_.end() && !it->second.empty()) {
                 auto conn = std::move(it->second.front());
                 it->second.pop();
-                // Clean up empty queues
                 if (it->second.empty()) pool_.erase(it);
                 return conn;
             }
+            if (activeCount_ >= 10) {
+                throw RpcException("getConnection: max active connections reached");
+            }
+            ++activeCount_;
         }
 
-        // Create new connection
         auto conn = std::make_shared<TcpClient>(ep, mgr);
         conn->setMessageCallback(messageCallback_);
         conn->Start();
@@ -118,6 +120,7 @@ public:
         {
             std::lock_guard<std::mutex> lock(mutex_);
             pool_[ptr->endPoint()].push(std::move(ptr));
+            if (activeCount_ > 0) --activeCount_;
         }
         condition_.notify_one();
     }

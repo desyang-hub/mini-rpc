@@ -39,7 +39,7 @@ void ServiceInstanceCache::subscribeService(const std::string& name)
 
     if (listeners_.count(name)) return;
 
-    ServiceChangeListener* raw = new ServiceChangeListener(instanceCache_);
+    ServiceChangeListener* raw = new ServiceChangeListener(instanceCache_, cacheMutex_);
     ListenerPtr listener(raw, NoDelete{});
 
     try {

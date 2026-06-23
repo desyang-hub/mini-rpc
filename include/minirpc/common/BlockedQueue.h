@@ -30,6 +30,9 @@ public:
 
     // 从阻塞队列中取出数据
     bool pop(T& t);
+
+    // Non-blocking pop - returns false immediately if empty
+    bool try_pop(T& t);
 };
 
 template<class T>
@@ -87,6 +90,15 @@ bool BlockedQueue<T>::pop(T& t) {
     else {
         return false;
     }
+}
+
+template<class T>
+bool BlockedQueue<T>::try_pop(T& t) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (que_.empty()) return false;
+    t = std::move(que_.front());
+    que_.pop();
+    return true;
 }
     
 } // namespace minirpc

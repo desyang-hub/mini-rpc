@@ -75,6 +75,9 @@ int main(int argc, char* argv[])
     // Initialize RPC client
     minirpc::RpcClient::GetInstance().init(cfg.registry_address);
 
+    // Allow Nacos subscription to sync
+    std::this_thread::sleep_for(std::chrono::seconds(2));
+
     // Run benchmark
     auto t0 = Clock::now();
     {

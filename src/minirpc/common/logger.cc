@@ -3,6 +3,7 @@
 
 #include <thread>
 #include <iostream>
+#include <vector>
 #include <unistd.h>
 
 namespace minirpc
@@ -49,14 +50,23 @@ Logger::~Logger() {
 void Logger::async_log_write() {
     std::string msg;
     while (true) {
-        // 做任务，就是将日志一条条写入到日志文件中
-        if (blocked_que_->pop(msg)) { {
-            fputs(msg.c_str(), log_file_);
-            fflush(log_file_);
+        // Block until at least one message arrives
+        if (!blocked_que_->pop(msg)) break;
+
+        // Batch-drain: collect all pending messages without blocking
+        std::vector<std::string> batch;
+        batch.push_back(std::move(msg));
+
+        std::string extra;
+        while (blocked_que_->try_pop(extra)) {
+            batch.push_back(std::move(extra));
         }
+
+        // Write entire batch, flush once
+        for (auto& m : batch) {
+            fputs(m.c_str(), log_file_);
         }
-        else
-            break;
+        fflush(log_file_);
     }
 }
 
