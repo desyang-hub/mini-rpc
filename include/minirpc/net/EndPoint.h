@@ -4,7 +4,7 @@
  * @Author       : desyang
  * @Date         : 2026-06-10 11:48:37
  * @LastEditors  : desyang
- * @LastEditTime : 2026-06-10 17:03:43
+ * @LastEditTime : 2026-06-22 13:29:02
 **/
 #pragma once
 
@@ -22,6 +22,8 @@ struct EndPoint
     bool operator==(const EndPoint &rhs) const;
 
     EndPoint(const std::string &host, int port);
+
+    EndPoint() = default;
 };
 
 } // namespace minirpc

@@ -59,7 +59,7 @@ private:
 // --- Template implementations ---
 
 template<class R, class... Args>
-R RpcClient::Call(const char* /*serviceName*/, const char* method, Args&&... args)
+R RpcClient::Call(const char* serviceName/*serviceName*/, const char* method, Args&&... args)
 {
     uint64_t requestId = id_.fetch_add(1, std::memory_order_relaxed);
 
@@ -75,7 +75,7 @@ R RpcClient::Call(const char* /*serviceName*/, const char* method, Args&&... arg
         bytes = Encoder::encodeRequest(method, body, requestId);
     }
 
-    return invoke<R>(method, bytes, requestId);
+    return invoke<R>(serviceName, bytes, requestId);
 }
 
 template<class R>
@@ -113,11 +113,11 @@ inline std::future<Response> RpcClient::asyncInvoke(const char* name, const Byte
 
     TcpClientPtr client = connMgr_.getConnection(eps);
 
-    {
-        std::lock_guard<std::mutex> lock(mutex_);
-        promises_[id] = PendingRequest{client, std::promise<Response>()};
-    }
+    std::unique_lock<std::mutex> lock(mutex_);
+    promises_[id] = PendingRequest{client, std::promise<Response>()};
     auto fut = promises_[id].promise.get_future();
+    lock.unlock();
+    
 
     client->sendRequest(bytes.data(), bytes.size());
     return fut;

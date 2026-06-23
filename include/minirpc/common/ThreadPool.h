@@ -10,14 +10,10 @@
 #include <stdexcept>
 #include <functional>
 #include <condition_variable>
+#include <iostream>
 
 namespace minirpc
 {
-    
-namespace
-{
-    const size_t DEFAULT_THREAD_POOL_SIZE = std::thread::hardware_concurrency();   
-} // namespace
 
 class ThreadPool
 {
@@ -31,7 +27,7 @@ private:
     std::condition_variable condition_;
 
 public:
-    explicit ThreadPool(const int pool_size = DEFAULT_THREAD_POOL_SIZE);
+    explicit ThreadPool(int pool_size = -1);
     ~ThreadPool();
 
     template<class F, class ...Args>
@@ -42,8 +38,9 @@ public:
     ThreadPool& operator=(const ThreadPool&) = delete;
 };
 
-inline ThreadPool::ThreadPool(const int pool_size) : is_running_(true)
+inline ThreadPool::ThreadPool(int pool_size) : is_running_(true)
 {
+    if (pool_size < 0) pool_size = std::thread::hardware_concurrency();
     workers_.reserve(pool_size);
     // 启用多个线程，用于执行提交的任务
     for (int i = 0; i < pool_size; ++i) {

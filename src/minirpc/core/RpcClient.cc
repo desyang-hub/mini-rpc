@@ -49,7 +49,7 @@ void RpcClient::MessageHandler(const muduo::net::TcpConnectionPtr&, muduo::net::
 
         Response resp;
         uint64_t rid = Decoder::Decode(buf->peek(), resp);
-        buf->retrieve(pkg_len + 4);  // +4 for check_num
+        buf->retrieve(pkg_len);  // +4 for check_num
 
         PendingRequest req;
         {

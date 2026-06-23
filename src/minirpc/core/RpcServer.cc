@@ -137,7 +137,7 @@ void RpcServer::MessageHandler(const muduo::net::TcpConnectionPtr& conn,
         std::string srvName;
         std::string body;
         uint64_t rid = Decoder::Decode(buf->peek(), srvName, body);
-        buf->retrieve(pkg_len + 4);  // +4 for check_num
+        buf->retrieve(pkg_len);  // +4 for check_num
 
         threadPool_.enqueue([this, conn, rid, srvName = std::move(srvName), body = std::move(body)]() {
             std::string resp;
